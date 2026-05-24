@@ -6,7 +6,7 @@ let socket: Socket | null = null
 export function getSocket(): Socket {
   if (socket) return socket
   const token = useAuthStore.getState().token
-  socket = io({
+  socket = io(import.meta.env.VITE_SOCKET_URL || undefined, {
     path: '/socket.io',
     auth: { token },
     autoConnect: true,
