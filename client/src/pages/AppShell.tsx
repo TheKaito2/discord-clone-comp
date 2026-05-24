@@ -13,6 +13,7 @@ import { getSocket } from '../lib/socket'
 import SearchOverlay from '../features/search/SearchOverlay'
 import JoinModal from '../features/invite/JoinModal'
 import VoicePanel from '../features/voice/VoicePanel'
+import { useVoiceRosterSync } from '../features/voice/useVoiceRosterSync'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRef } from 'react'
 
@@ -30,6 +31,9 @@ export default function AppShell() {
   const qc = useQueryClient()
   const qcRef = useRef(qc)
   qcRef.current = qc
+
+  // subscribe to voice:roster broadcasts to keep sidebar in sync
+  useVoiceRosterSync()
 
   // ensure socket connects with token on mount + listen to presence updates
   useEffect(() => {

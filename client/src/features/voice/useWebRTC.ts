@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import SimplePeer from 'simple-peer'
 import { getSocket } from '../../lib/socket'
+import { useVoiceStore } from '../../store/voice'
 
 export type VoicePeer = {
   socketId: string
@@ -13,37 +14,93 @@ type JoinAck =
   | { ok: false; error: string }
   | { ok: true; peers: { socketId: string; userId: string; username: string }[] }
 
+const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+}
+
 export function useWebRTC(channelId: string | undefined) {
   const [connected, setConnected] = useState(false)
   const [peers, setPeers] = useState<Record<string, VoicePeer>>({})
   const [micOn, setMicOn] = useState(true)
+  const [deafened, setDeafened] = useState(false)
   const [camOn, setCamOn] = useState(false)
   const [screenOn, setScreenOn] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
   const localStreamRef = useRef<MediaStream | null>(null)
   const peerInstances = useRef<Record<string, SimplePeer.Instance>>({})
-  const camStreamRef = useRef<MediaStream | null>(null)
-  const screenStreamRef = useRef<MediaStream | null>(null)
   const senderTracks = useRef<{ audio?: MediaStreamTrack; video?: MediaStreamTrack }>({})
 
+  const setActive = useVoiceStore((s) => s.setActive)
+  const setSpeaking = useVoiceStore((s) => s.setSpeaking)
+
+  // ── voice-level meter (speaking detection) ────────────────────────────────
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const meters = useRef<Map<string, { node: AnalyserNode; data: Uint8Array; userId: string }>>(new Map())
+  const rafRef = useRef<number | null>(null)
+  const ensureAudioCtx = useCallback(() => {
+    if (!audioCtxRef.current) {
+      const Ctor = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)
+      audioCtxRef.current = new Ctor()
+    }
+    return audioCtxRef.current
+  }, [])
+  const attachMeter = useCallback((key: string, stream: MediaStream, userId: string) => {
+    const tracks = stream.getAudioTracks()
+    if (!tracks.length) return
+    try {
+      const ctx = ensureAudioCtx()
+      const src = ctx.createMediaStreamSource(stream)
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 256
+      src.connect(analyser)
+      meters.current.set(key, { node: analyser, data: new Uint8Array(analyser.frequencyBinCount), userId })
+    } catch (e) { console.warn('[meter] attach', e) }
+  }, [ensureAudioCtx])
+  const detachMeter = useCallback((key: string) => {
+    meters.current.delete(key)
+  }, [])
+
+  useEffect(() => {
+    function tick() {
+      meters.current.forEach((m) => {
+        m.node.getByteFrequencyData(m.data)
+        let sum = 0
+        for (let i = 0; i < m.data.length; i++) sum += m.data[i]
+        const avg = sum / m.data.length
+        // threshold tuned for normal voice
+        setSpeaking(m.userId, avg > 14)
+      })
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    }
+  }, [setSpeaking])
+
+  // ── cleanup ───────────────────────────────────────────────────────────────
   const cleanup = useCallback(() => {
-    Object.values(peerInstances.current).forEach((p) => p.destroy())
+    Object.values(peerInstances.current).forEach((p) => { try { p.destroy() } catch { /* ignore */ } })
     peerInstances.current = {}
     setPeers({})
     setConnected(false)
+    setActive(null)
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((t) => t.stop())
       localStreamRef.current = null
     }
-    if (camStreamRef.current) {
-      camStreamRef.current.getTracks().forEach((t) => t.stop())
-      camStreamRef.current = null
+    senderTracks.current = {}
+    meters.current.clear()
+    if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+      try { audioCtxRef.current.close() } catch { /* ignore */ }
+      audioCtxRef.current = null
     }
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach((t) => t.stop())
-      screenStreamRef.current = null
-    }
-  }, [])
+  }, [setActive])
 
+  // ── peer builder ──────────────────────────────────────────────────────────
   const buildPeer = useCallback(
     (initiator: boolean, target: { socketId: string; userId: string; username: string }) => {
       const stream = localStreamRef.current!
@@ -56,11 +113,11 @@ export function useWebRTC(channelId: string | undefined) {
           ...s,
           [target.socketId]: { ...(s[target.socketId] || target), stream: remote },
         }))
+        attachMeter(target.socketId, remote, target.userId)
       })
-      peer.on('error', (e) => {
-        console.warn('[peer]', target.username, e?.message)
-      })
+      peer.on('error', (e) => console.warn('[peer]', target.username, e?.message))
       peer.on('close', () => {
+        detachMeter(target.socketId)
         delete peerInstances.current[target.socketId]
         setPeers((s) => {
           const c = { ...s }
@@ -71,36 +128,41 @@ export function useWebRTC(channelId: string | undefined) {
       peerInstances.current[target.socketId] = peer
       setPeers((s) => ({ ...s, [target.socketId]: { ...target, ...s[target.socketId] } }))
     },
-    [],
+    [attachMeter, detachMeter],
   )
 
+  // ── join ──────────────────────────────────────────────────────────────────
   const join = useCallback(
     async (chId: string) => {
+      setError(null)
       try {
-        // mic first; video toggled separately
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: AUDIO_CONSTRAINTS,
+          video: false,
+        })
         localStreamRef.current = stream
         senderTracks.current.audio = stream.getAudioTracks()[0]
+        attachMeter('self', stream, 'self')
 
         const s = getSocket()
         const ack: JoinAck = await new Promise((resolve) => {
           s.emit('voice:join', { channelId: chId }, resolve)
         })
         if (!ack.ok) {
-          console.warn('[voice] join failed', ack.error)
           cleanup()
+          setError(ack.error || 'Could not join')
           return
         }
         setConnected(true)
-        // existing peers — initiator
+        setActive(chId)
         ack.peers.forEach((p) => buildPeer(true, p))
       } catch (e) {
-        console.error('[voice] mic denied', e)
+        const err = e as Error
+        setError(err?.name === 'NotAllowedError' ? 'Microphone permission denied' : err?.message || 'Could not start voice')
         cleanup()
-        throw e
       }
     },
-    [buildPeer, cleanup],
+    [buildPeer, cleanup, setActive, attachMeter],
   )
 
   const leave = useCallback(() => {
@@ -109,20 +171,20 @@ export function useWebRTC(channelId: string | undefined) {
     cleanup()
   }, [channelId, cleanup])
 
-  // wire events while connected
+  // wire socket events
   useEffect(() => {
     if (!channelId) return
     const s = getSocket()
     function onPeerJoined(p: { socketId: string; userId: string; username: string }) {
       if (!localStreamRef.current) return
-      // non-initiator
       buildPeer(false, p)
     }
     function onSignal({ fromSocketId, signal }: { fromSocketId: string; signal: SimplePeer.SignalData }) {
-      peerInstances.current[fromSocketId]?.signal(signal)
+      try { peerInstances.current[fromSocketId]?.signal(signal) } catch (e) { console.warn('[signal]', e) }
     }
     function onPeerLeft({ socketId }: { socketId: string }) {
-      peerInstances.current[socketId]?.destroy()
+      try { peerInstances.current[socketId]?.destroy() } catch { /* ignore */ }
+      detachMeter(socketId)
       delete peerInstances.current[socketId]
       setPeers((cur) => {
         const c = { ...cur }
@@ -139,13 +201,11 @@ export function useWebRTC(channelId: string | undefined) {
       s.off('voice:signal', onSignal)
       s.off('voice:peer-left', onPeerLeft)
     }
-  }, [channelId, buildPeer])
+  }, [channelId, buildPeer, detachMeter])
 
-  // cleanup if channel changes or unmount
-  useEffect(() => {
-    return () => cleanup()
-  }, [cleanup])
+  useEffect(() => () => cleanup(), [cleanup])
 
+  // ── toggles ───────────────────────────────────────────────────────────────
   function toggleMic() {
     const track = senderTracks.current.audio
     if (!track) return
@@ -153,76 +213,115 @@ export function useWebRTC(channelId: string | undefined) {
     setMicOn(track.enabled)
   }
 
-  async function toggleCam() {
-    if (camOn) {
-      // stop cam
-      camStreamRef.current?.getTracks().forEach((t) => t.stop())
-      camStreamRef.current = null
-      const t = senderTracks.current.video
+  function toggleDeafen() {
+    setDeafened((d) => {
+      const next = !d
+      // when deafening, also mute mic; un-deafen restores mic to ON
+      const t = senderTracks.current.audio
       if (t) {
-        Object.values(peerInstances.current).forEach((p) => {
-          try { (p as unknown as { removeTrack: (t: MediaStreamTrack, s: MediaStream) => void }).removeTrack(t, localStreamRef.current!) } catch { /* ignore */ }
-        })
+        if (next) {
+          t.enabled = false
+          setMicOn(false)
+        } else {
+          t.enabled = true
+          setMicOn(true)
+        }
       }
-      senderTracks.current.video = undefined
-      setCamOn(false)
-    } else {
-      try {
-        const cam = await navigator.mediaDevices.getUserMedia({ video: true })
-        camStreamRef.current = cam
-        const vt = cam.getVideoTracks()[0]
-        senderTracks.current.video = vt
+      return next
+    })
+  }
+
+  type PeerExt = SimplePeer.Instance & {
+    addTrack: (t: MediaStreamTrack, s: MediaStream) => void
+    removeTrack: (t: MediaStreamTrack, s: MediaStream) => void
+    replaceTrack: (o: MediaStreamTrack, n: MediaStreamTrack, s: MediaStream) => void
+  }
+
+  async function toggleCam() {
+    if (!localStreamRef.current) return
+    if (camOn || screenOn) {
+      // stop whatever video is active (cam or screen) and clear
+      const existing = senderTracks.current.video
+      if (existing) {
         Object.values(peerInstances.current).forEach((p) => {
-          try {
-            ;(p as unknown as { addTrack: (t: MediaStreamTrack, s: MediaStream) => void }).addTrack(vt, localStreamRef.current!)
-          } catch (e) { console.warn('addTrack', e) }
+          try { (p as PeerExt).removeTrack(existing, localStreamRef.current!) } catch { /* ignore */ }
         })
-        setCamOn(true)
-      } catch (e) { console.error('[voice] camera denied', e) }
+        existing.stop()
+        senderTracks.current.video = undefined
+      }
+      setCamOn(false)
+      setScreenOn(false)
+      if (camOn) return
     }
+    try {
+      const cam = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } })
+      const vt = cam.getVideoTracks()[0]
+      senderTracks.current.video = vt
+      localStreamRef.current.addTrack(vt)
+      Object.values(peerInstances.current).forEach((p) => {
+        try { (p as PeerExt).addTrack(vt, localStreamRef.current!) } catch (e) { console.warn('addTrack', e) }
+      })
+      vt.onended = () => {
+        setCamOn(false)
+        senderTracks.current.video = undefined
+      }
+      setCamOn(true)
+    } catch (e) { console.warn('[voice] camera denied', e) }
   }
 
   async function toggleScreen() {
+    if (!localStreamRef.current) return
     if (screenOn) {
-      screenStreamRef.current?.getTracks().forEach((t) => t.stop())
-      screenStreamRef.current = null
-      setScreenOn(false)
-    } else {
-      try {
-        const ss = await navigator.mediaDevices.getDisplayMedia({ video: true })
-        screenStreamRef.current = ss
-        const vt = ss.getVideoTracks()[0]
-        // replace existing camera video track with screen, or add screen track
-        const existing = senderTracks.current.video
+      const existing = senderTracks.current.video
+      if (existing) {
         Object.values(peerInstances.current).forEach((p) => {
-          try {
-            if (existing) {
-              ;(p as unknown as { replaceTrack: (o: MediaStreamTrack, n: MediaStreamTrack, s: MediaStream) => void }).replaceTrack(
-                existing,
-                vt,
-                localStreamRef.current!,
-              )
-            } else {
-              ;(p as unknown as { addTrack: (t: MediaStreamTrack, s: MediaStream) => void }).addTrack(vt, localStreamRef.current!)
-            }
-          } catch (e) { console.warn('share', e) }
+          try { (p as PeerExt).removeTrack(existing, localStreamRef.current!) } catch { /* ignore */ }
         })
-        senderTracks.current.video = vt
-        vt.onended = () => {
-          setScreenOn(false)
-          screenStreamRef.current = null
-        }
-        setScreenOn(true)
-      } catch (e) { console.warn('[voice] screen denied', e) }
+        existing.stop()
+        senderTracks.current.video = undefined
+      }
+      setScreenOn(false)
+      setCamOn(false)
+      return
     }
+    try {
+      const ss = await navigator.mediaDevices.getDisplayMedia({ video: true })
+      const vt = ss.getVideoTracks()[0]
+      const existing = senderTracks.current.video
+      if (existing) {
+        // replace existing video track (e.g. cam) with screen share
+        Object.values(peerInstances.current).forEach((p) => {
+          try { (p as PeerExt).replaceTrack(existing, vt, localStreamRef.current!) } catch (e) { console.warn('replaceTrack', e) }
+        })
+        existing.stop()
+      } else {
+        localStreamRef.current.addTrack(vt)
+        Object.values(peerInstances.current).forEach((p) => {
+          try { (p as PeerExt).addTrack(vt, localStreamRef.current!) } catch (e) { console.warn('addTrack', e) }
+        })
+      }
+      senderTracks.current.video = vt
+      vt.onended = () => {
+        // user clicked browser "stop sharing"
+        Object.values(peerInstances.current).forEach((p) => {
+          try { (p as PeerExt).removeTrack(vt, localStreamRef.current!) } catch { /* ignore */ }
+        })
+        senderTracks.current.video = undefined
+        setScreenOn(false)
+        setCamOn(false)
+      }
+      setScreenOn(true)
+      setCamOn(false)
+    } catch (e) { console.warn('[voice] screen denied', e) }
   }
 
   return {
     connected,
     peers: Object.values(peers),
-    micOn, camOn, screenOn,
+    micOn, deafened, camOn, screenOn,
+    error,
     join, leave,
-    toggleMic, toggleCam, toggleScreen,
+    toggleMic, toggleDeafen, toggleCam, toggleScreen,
     localStream: localStreamRef.current,
   }
 }

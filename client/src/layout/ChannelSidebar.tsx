@@ -3,6 +3,7 @@ import { Hash, Volume2, ChevronDown, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import clsx from 'clsx'
 import type { Channel, Guild } from '../lib/queries'
+import { useVoiceStore } from '../store/voice'
 
 export default function ChannelSidebar({ guild }: { guild: Guild }) {
   const { channelId } = useParams()
@@ -53,16 +54,42 @@ function Category({
           const Icon = c.type === 'voice' ? Volume2 : Hash
           const active = activeId === c.id
           return (
-            <Link
-              key={c.id}
-              to={`/app/${guildId}/${c.id}`}
-              className={clsx('chan-row', active && 'active')}
-            >
-              <Icon size={20} className="shrink-0 text-text-dim" />
-              <span className="truncate text-[15px] leading-5">{c.name}</span>
-            </Link>
+            <div key={c.id}>
+              <Link
+                to={`/app/${guildId}/${c.id}`}
+                className={clsx('chan-row', active && 'active')}
+              >
+                <Icon size={20} className="shrink-0 text-text-dim" />
+                <span className="truncate text-[15px] leading-5">{c.name}</span>
+              </Link>
+              {c.type === 'voice' && <VoiceRoster channelId={c.id} />}
+            </div>
           )
         })}
+    </div>
+  )
+}
+
+function VoiceRoster({ channelId }: { channelId: string }) {
+  const members = useVoiceStore((s) => s.roster[channelId] || [])
+  const speaking = useVoiceStore((s) => s.speakingUsers)
+  if (members.length === 0) return null
+  return (
+    <div className="pl-8 pr-2 pb-1">
+      {members.map((m) => (
+        <div
+          key={m.socketId}
+          className={clsx(
+            'flex items-center gap-2 px-2 py-1 rounded text-[13px] text-text-sub hover:bg-hover-a hover:text-text-mute',
+            speaking.has(m.userId) && 'text-online',
+          )}
+        >
+          <div className="w-6 h-6 rounded-full bg-brand grid place-items-center text-[10px] font-semibold text-white">
+            {m.username[0]?.toUpperCase()}
+          </div>
+          <span className="truncate">{m.username}</span>
+        </div>
+      ))}
     </div>
   )
 }

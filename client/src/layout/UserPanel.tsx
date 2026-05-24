@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useAuthStore } from '../store/auth'
-import { Mic, Headphones, Settings, LogOut } from 'lucide-react'
-import { disconnectSocket } from '../lib/socket'
-import { useNavigate } from 'react-router-dom'
+import { Mic, Headphones, Settings, LogOut, Wifi, PhoneOff } from 'lucide-react'
+import { disconnectSocket, getSocket } from '../lib/socket'
+import { useNavigate, useParams } from 'react-router-dom'
 import StatusMenu from '../features/profile/StatusMenu'
+import { useVoiceStore } from '../store/voice'
+import { useGuilds } from '../lib/queries'
 import clsx from 'clsx'
 
 const statusColor: Record<string, string> = {
@@ -23,7 +25,17 @@ export default function UserPanel() {
   const user = useAuthStore((s) => s.user)
   const clear = useAuthStore((s) => s.clear)
   const nav = useNavigate()
+  const { guildId } = useParams()
   const [menu, setMenu] = useState(false)
+  const activeChannelId = useVoiceStore((s) => s.activeChannelId)
+  const guilds = useGuilds()
+
+  const activeVoice = activeChannelId
+    ? guilds.data
+        ?.flatMap((g) => g.channels.map((c) => ({ ...c, guildId: g.id, guildName: g.name })))
+        .find((c) => c.id === activeChannelId) || null
+    : null
+
   if (!user) return null
 
   function logout() {
@@ -32,8 +44,37 @@ export default function UserPanel() {
     nav('/login', { replace: true })
   }
 
+  function disconnectVoice() {
+    if (!activeChannelId) return
+    getSocket().emit('voice:leave', { channelId: activeChannelId })
+    useVoiceStore.getState().setActive(null)
+  }
+
   return (
-    <div className="relative h-[53px] bg-user-panel px-2 flex items-center gap-2 shrink-0">
+    <div className="relative bg-user-panel shrink-0">
+      {activeVoice && (
+        <div className="px-2 py-2 border-b border-rail/60 flex items-center gap-2">
+          <Wifi size={14} className="text-online shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-online text-[12px] font-semibold leading-tight">Voice Connected</div>
+            <button
+              onClick={() => nav(`/app/${guildId || activeVoice.id}/${activeVoice.id}`)}
+              className="text-text-sub hover:text-text-hi text-[11px] truncate w-full text-left"
+              title={`#${activeVoice.name}`}
+            >
+              #{activeVoice.name} / {activeVoice.guildName}
+            </button>
+          </div>
+          <button
+            onClick={disconnectVoice}
+            title="Disconnect"
+            className="p-1.5 rounded text-text-sub hover:bg-hover-a hover:text-danger"
+          >
+            <PhoneOff size={16} />
+          </button>
+        </div>
+      )}
+      <div className="relative h-[53px] px-2 flex items-center gap-2">
       {menu && <StatusMenu onClose={() => setMenu(false)} />}
       <button
         onClick={() => setMenu((v) => !v)}
@@ -65,6 +106,7 @@ export default function UserPanel() {
       <button className="p-1.5 hover:bg-hover-a rounded text-text-sub hover:text-text-hi" title="Settings">
         <Settings size={18} />
       </button>
+      </div>
     </div>
   )
 }
