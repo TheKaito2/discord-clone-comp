@@ -37,7 +37,7 @@ export function searchRouter() {
       Promise.resolve(Object.fromEntries(channels.map((c) => [c._id.toString(), c]))),
     ])
     const byUser = Object.fromEntries(
-      users.map((u) => [u._id.toString(), { id: u._id.toString(), username: u.username, avatarColor: u.avatarColor }]),
+      users.map((u) => [u._id.toString(), { id: u._id.toString(), username: u.username, avatarColor: u.avatarColor, avatarUrl: u.avatarUrl || '' }]),
     )
 
     res.json({
@@ -45,7 +45,7 @@ export function searchRouter() {
         id: m._id.toString(),
         channelId: m.channelId.toString(),
         channelName: chMap[m.channelId.toString()]?.name || '',
-        author: byUser[m.authorId.toString()] || { id: m.authorId.toString(), username: '?', avatarColor: '#888' },
+        author: byUser[m.authorId.toString()] || { id: m.authorId.toString(), username: '?', avatarColor: '#888', avatarUrl: '' },
         content: m.content,
         createdAt: m.createdAt,
       })),

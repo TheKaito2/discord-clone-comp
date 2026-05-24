@@ -4,7 +4,11 @@ import { persist } from 'zustand/middleware'
 export type User = {
   id: string
   username: string
+  displayName?: string
+  email?: string
+  phone?: string
   avatarColor: string
+  avatarUrl?: string
   status: 'online' | 'idle' | 'dnd' | 'offline'
 }
 

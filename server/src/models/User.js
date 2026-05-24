@@ -6,7 +6,11 @@ const UserSchema = new mongoose.Schema(
   {
     username:     { type: String, required: true, unique: true, trim: true, minlength: 3 },
     passwordHash: { type: String, required: true },
+    displayName:  { type: String, default: '' },
+    email:        { type: String, default: '' },
+    phone:        { type: String, default: '' },
     avatarColor:  { type: String, default: () => palette[Math.floor(Math.random() * palette.length)] },
+    avatarUrl:    { type: String, default: '' },
     status:       { type: String, enum: ['online', 'idle', 'dnd', 'offline'], default: 'offline' },
     lastSeenAt:   { type: Date, default: Date.now },
   },
@@ -17,7 +21,11 @@ UserSchema.methods.toPublic = function () {
   return {
     id: this._id.toString(),
     username: this.username,
+    displayName: this.displayName || '',
+    email: this.email || '',
+    phone: this.phone || '',
     avatarColor: this.avatarColor,
+    avatarUrl: this.avatarUrl,
     status: this.status,
   }
 }

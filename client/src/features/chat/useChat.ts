@@ -3,6 +3,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { getSocket } from '../../lib/socket'
 import { api } from '../../lib/api'
 import type { ChatMessage } from '../../lib/queries'
+import { sfx } from '../../lib/sfx'
+import { useAuthStore } from '../../store/auth'
 
 export function useChannelChat(channelId: string | undefined) {
   const qc = useQueryClient()
@@ -17,8 +19,11 @@ export function useChannelChat(channelId: string | undefined) {
     const s = getSocket()
     s.emit('channel:join', channelId)
 
+    const meId = useAuthStore.getState().user?.id
     const onNew = (m: ChatMessage) => {
       if (m.channelId !== channelId) return
+      // only sfx for someone else's message (your own send already plays its own cue)
+      if (m.author.id !== meId && !m.tempId) sfx.play('message')
       qc.setQueryData<ChatMessage[]>(['messages', channelId], (cur) => {
         if (!cur) return [m]
         if (m.tempId) {

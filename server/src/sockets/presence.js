@@ -17,6 +17,7 @@ export function wirePresence(io) {
 
     const memberships = await Membership.find({ userId: new mongoose.Types.ObjectId(userId) }).lean()
     memberships.forEach((m) => socket.join(`guild:${m.guildId}`))
+    socket.join(`user:${userId}`)
     socket.broadcast.emit('presence:update', { userId, status: 'online' })
 
     socket.on('me:status', async (status) => {

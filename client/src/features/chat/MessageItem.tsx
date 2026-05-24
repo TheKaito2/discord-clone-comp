@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ChatMessage } from '../../lib/queries'
 import { useAuthStore } from '../../store/auth'
 import { Pencil, Trash2, Check, X } from 'lucide-react'
+import Avatar from '../../components/Avatar'
 
 function fmtTime(iso: string) {
   const d = new Date(iso)
@@ -28,12 +29,12 @@ export default function MessageItem({
     <div className="group flex gap-4 px-4 py-0.5 hover:bg-bg-grad/40 relative">
       <div className="w-10 shrink-0 pt-0.5">
         {!hideHeader ? (
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold text-white"
-            style={{ background: m.author.avatarColor }}
-          >
-            {m.author.username[0]?.toUpperCase()}
-          </div>
+          <Avatar
+            username={m.author.username}
+            avatarColor={m.author.avatarColor}
+            avatarUrl={m.author.avatarUrl}
+            size={40}
+          />
         ) : (
           <span className="invisible text-[11px] text-text-sub group-hover:visible block text-right pr-1 pt-1">
             {new Date(m.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
@@ -42,9 +43,14 @@ export default function MessageItem({
       </div>
       <div className="flex-1 min-w-0">
         {!hideHeader && (
-          <div className="flex items-baseline gap-2 leading-[22px]">
-            <span className="font-medium text-[15px] text-text-hi">{m.author.username}</span>
-            <span className="text-[11px] text-text-sub">{fmtTime(m.createdAt)}</span>
+          <div className="flex items-baseline gap-2">
+            <span
+              className="font-medium text-[15px] leading-[22px]"
+              style={{ color: m.author.avatarColor }}
+            >
+              {m.author.username}
+            </span>
+            <span className="text-[11px] leading-[22px] font-medium text-text-sub">{fmtTime(m.createdAt)}</span>
           </div>
         )}
         {editing ? (
@@ -81,8 +87,8 @@ export default function MessageItem({
         ) : (
           <div className="text-[15px] text-text-body leading-[20px] break-words whitespace-pre-wrap mt-0.5">
             {m.content}
-            {m.editedAt && <span className="text-[10px] text-text-sub ml-1">(edited)</span>}
-            {m.pending && <span className="text-[10px] text-text-sub ml-1">…</span>}
+            {m.editedAt && <span className="text-[9px] leading-[10px] text-text-sub ml-1">(edited)</span>}
+            {m.pending && <span className="text-[9px] leading-[10px] text-text-sub ml-1">…</span>}
           </div>
         )}
       </div>

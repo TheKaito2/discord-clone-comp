@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom'
-import { Hash, Volume2, ChevronDown, ChevronRight } from 'lucide-react'
-import { useState } from 'react'
+import { Hash, Volume2, ChevronDown, ChevronRight, Bell, UserPlus, Pin, Settings as SettingsIcon, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import type { Channel, Guild } from '../lib/queries'
 import { useVoiceStore } from '../store/voice'
@@ -11,6 +11,18 @@ export default function ChannelSidebar({ guild }: { guild: Guild }) {
     ;(acc[c.category] ||= []).push(c)
     return acc
   }, {})
+  const [menu, setMenu] = useState(false)
+  const [allOpen, setAllOpen] = useState(true)
+  const [showBrowse, setShowBrowse] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(false)
+    }
+    if (menu) document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [menu])
 
   return (
     <aside className="w-sidebar bg-panel flex flex-col shrink-0 h-full">
@@ -21,24 +33,128 @@ export default function ChannelSidebar({ guild }: { guild: Guild }) {
       </div>
 
       {/* Server header — d19: 240×48, padding 12/16, font 15/600/#FFF */}
-      <header className="h-12 px-4 flex items-center justify-between border-b border-rail/60 shadow-elev1 shrink-0">
-        <span className="text-text-hi font-semibold text-[15px] leading-5 truncate">{guild.name}</span>
-        <span className="text-text-sub text-xs">▾</span>
+      <header className="relative h-12 px-4 flex items-center justify-between border-b border-rail/60 shadow-elev1 shrink-0">
+        <button
+          onClick={() => setMenu((v) => !v)}
+          className="flex-1 flex items-center justify-between text-left h-full"
+        >
+          <span className="text-text-hi font-semibold text-[15px] leading-5 truncate">{guild.name}</span>
+          <span className={clsx('text-text-mute text-xs transition-transform', menu && 'rotate-180')}>▾</span>
+        </button>
+        {menu && (
+          <div
+            ref={menuRef}
+            className="absolute top-12 left-2 right-2 bg-rail rounded-md shadow-elev1 py-1 z-30 border border-divider/40"
+          >
+            <ServerMenuItem icon={UserPlus} label="Invite People" onClick={() => { setMenu(false); navigator.clipboard?.writeText(guild.inviteCode || '').catch(() => {}) }} hint={guild.inviteCode} />
+            <ServerMenuItem icon={Bell} label="Notification Settings" onClick={() => setMenu(false)} />
+            <ServerMenuItem icon={Pin} label="Pinned Messages" onClick={() => setMenu(false)} />
+            <div className="h-px bg-divider/60 my-1" />
+            <ServerMenuItem icon={SettingsIcon} label="Server Settings" onClick={() => setMenu(false)} />
+          </div>
+        )}
       </header>
 
       {/* Channel scroll area */}
       <div className="flex-1 overflow-y-auto pt-4 pb-2">
-        {/* Browse Channels row — d19: 224×32, radius 4, padding 8 horiz, gap 6 */}
-        <button className="mx-2 flex items-center gap-1.5 w-[calc(100%-1rem)] h-8 px-2 rounded-[4px] text-text-sub hover:bg-hover-a hover:text-text-mute transition-colors">
+        {/* Browse Channels row — d19: 224×32 — opens modal listing all */}
+        <button
+          onClick={() => setShowBrowse(true)}
+          className="mx-2 flex items-center gap-1.5 w-[calc(100%-1rem)] h-8 px-2 rounded-[4px] text-text-sub hover:bg-hover-a hover:text-text-mute transition-colors"
+          title="Browse all channels"
+        >
           <Hash size={20} className="shrink-0 text-text-dim" />
-          <span className="text-[15px] leading-5">Browse Channels</span>
+          <span className="text-[15px] leading-5 font-medium">Browse Channels</span>
         </button>
 
         {Object.entries(byCategory).map(([cat, list]) => (
-          <Category key={cat} name={cat} channels={list} activeId={channelId} guildId={guild.id} />
+          <Category
+            key={cat}
+            name={cat}
+            channels={list}
+            activeId={channelId}
+            guildId={guild.id}
+            forceOpen={allOpen}
+            collapseKey={allOpen ? 1 : 0}
+          />
         ))}
+
+        {Object.keys(byCategory).length > 1 && (
+          <button
+            onClick={() => setAllOpen((v) => !v)}
+            className="mx-2 mt-3 text-[12px] text-text-sub hover:text-text-hi tracking-cap uppercase font-semibold leading-4"
+          >
+            {allOpen ? 'Collapse all' : 'Expand all'}
+          </button>
+        )}
       </div>
+
+      {showBrowse && <BrowseChannelsModal guild={guild} onClose={() => setShowBrowse(false)} />}
     </aside>
+  )
+}
+
+function ServerMenuItem({
+  icon: Icon,
+  label,
+  hint,
+  onClick,
+}: {
+  icon: typeof UserPlus
+  label: string
+  hint?: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2 w-full px-2 h-8 text-[14px] text-text-sub hover:bg-brand hover:text-white rounded transition-colors"
+    >
+      <Icon size={16} className="shrink-0" />
+      <span className="flex-1 text-left">{label}</span>
+      {hint && <span className="text-[11px] opacity-70">{hint}</span>}
+    </button>
+  )
+}
+
+function BrowseChannelsModal({ guild, onClose }: { guild: Guild; onClose: () => void }) {
+  const [q, setQ] = useState('')
+  const filtered = guild.channels.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()))
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 grid place-items-center" onClick={onClose}>
+      <div className="bg-panel rounded-lg w-[520px] max-h-[70vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <header className="px-5 py-4 border-b border-divider/40 flex items-center justify-between shrink-0">
+          <div>
+            <h3 className="text-[18px] font-bold text-text-hi">Browse Channels</h3>
+            <p className="text-[13px] text-text-mute">{guild.name}</p>
+          </div>
+          <button onClick={onClose} className="text-text-sub hover:text-text-hi"><X size={18} /></button>
+        </header>
+        <div className="p-4 shrink-0">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search channels"
+            className="w-full bg-rail rounded h-8 px-3 text-[13px] text-text-body placeholder:text-text-sub outline-none focus:ring-1 focus:ring-brand"
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto px-2 pb-4">
+          {filtered.map((c) => (
+            <Link
+              key={c.id}
+              to={`/app/${guild.id}/${c.id}`}
+              onClick={onClose}
+              className="flex items-center gap-2 px-3 h-10 rounded text-text-sub hover:bg-hover-a hover:text-text-hi"
+            >
+              {c.type === 'voice' ? <Volume2 size={18} /> : <Hash size={18} />}
+              <span className="text-[14px] flex-1 truncate">{c.name}</span>
+              <span className="text-[11px] text-text-sub uppercase tracking-cap">{c.category}</span>
+            </Link>
+          ))}
+          {filtered.length === 0 && <div className="text-center text-text-sub py-6 text-[14px]">No channels match.</div>}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -47,13 +163,18 @@ function Category({
   channels,
   activeId,
   guildId,
+  forceOpen,
+  collapseKey,
 }: {
   name: string
   channels: Channel[]
   activeId?: string
   guildId: string
+  forceOpen: boolean
+  collapseKey: number
 }) {
   const [open, setOpen] = useState(true)
+  useEffect(() => { setOpen(forceOpen) }, [forceOpen, collapseKey])
   return (
     <div className="mt-4">
       {/* Category row — d19: 232×24, padding T=4 R=8 B=4 L=16 */}

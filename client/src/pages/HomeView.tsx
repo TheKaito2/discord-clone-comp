@@ -1,15 +1,19 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Users, UserCheck, UserPlus, MessageCircle, MoreVertical, Inbox, HelpCircle, Search } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import { Users, UserCheck, UserPlus, MessageCircle, MoreVertical, HelpCircle, Search, X, Phone } from 'lucide-react'
 import clsx from 'clsx'
 import { api } from '../lib/api'
 import { useAuthStore } from '../store/auth'
-import UserPanel from '../layout/UserPanel'
+import type { DM } from '../lib/queries'
+import Avatar from '../components/Avatar'
+import DMSidebar from '../layout/DMSidebar'
 
 type FriendUser = {
   id: string
   username: string
   avatarColor: string
+  avatarUrl?: string
   status: 'online' | 'idle' | 'dnd' | 'offline'
   lastSeenAt: string
 }
@@ -18,69 +22,42 @@ const TABS = ['Online', 'All', 'Pending', 'Blocked'] as const
 
 export default function HomeView() {
   const me = useAuthStore((s) => s.user)
+  const qc = useQueryClient()
+  const nav = useNavigate()
   const users = useQuery({
     queryKey: ['users'],
     queryFn: async () => (await api.get<FriendUser[]>('/users')).data,
   })
   const [tab, setTab] = useState<(typeof TABS)[number]>('Online')
+  const [search, setSearch] = useState('')
+  const [addFriend, setAddFriend] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+
+  function flash(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2200)
+  }
+
+  async function openDM(userId: string, startCall = false) {
+    try {
+      const { data } = await api.post<DM>('/dms', { userId })
+      qc.invalidateQueries({ queryKey: ['dms'] })
+      nav(`/app/dm/${data.id}${startCall ? '?call=1' : ''}`)
+    } catch {
+      flash('Could not open DM')
+    }
+  }
 
   const friends = (users.data || []).filter((u) => u.id !== me?.id)
   const online = friends.filter((u) => u.status !== 'offline')
-  const list = tab === 'Online' ? online : tab === 'All' ? friends : []
+  const base = tab === 'Online' ? online : tab === 'All' ? friends : []
+  const filtered = base.filter((u) => u.username.toLowerCase().includes(search.trim().toLowerCase()))
 
   return (
     <>
-      {/* Sidebar — d17 style: search + Friends button + Nitro + Direct Messages */}
-      <aside className="w-sidebar bg-panel shrink-0 h-full flex flex-col">
-        <header className="h-12 px-2 flex items-center border-b border-rail/60 shadow-elev1 shrink-0">
-          <button className="w-full text-left bg-rail rounded-[4px] px-2 h-7 text-text-sub text-[13px] hover:text-text-mute">
-            Find or start a conversation
-          </button>
-        </header>
-        <div className="flex-1 overflow-y-auto py-2">
-          <button className="mx-2 flex items-center gap-3 w-[calc(100%-1rem)] h-[42px] px-2 rounded-[4px] bg-active-a text-text-hi">
-            <Users size={20} />
-            <span className="text-[15px] font-medium">Friends</span>
-          </button>
-          <button className="mx-2 mt-0.5 flex items-center gap-3 w-[calc(100%-1rem)] h-[42px] px-2 rounded-[4px] text-text-sub hover:bg-hover-a hover:text-text-mute">
-            <Inbox size={20} />
-            <span className="text-[15px] font-medium">Inbox</span>
-          </button>
+      <DMSidebar />
 
-          <div className="flex items-center justify-between mt-4 px-3 mb-1">
-            <span className="uppercase tracking-cap text-[12px] font-semibold text-text-sub">Direct Messages</span>
-            <UserPlus size={16} className="text-text-sub hover:text-text-hi cursor-pointer" />
-          </div>
-          {friends.slice(0, 6).map((u) => (
-            <button
-              key={u.id}
-              className="mx-2 mt-0.5 flex items-center gap-3 w-[calc(100%-1rem)] h-[42px] px-2 rounded-[4px] text-text-sub hover:bg-hover-a hover:text-text-mute group"
-            >
-              <div className="relative shrink-0">
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold text-white"
-                  style={{ background: u.avatarColor }}
-                >
-                  {u.username[0].toUpperCase()}
-                </div>
-                <span
-                  className={clsx(
-                    'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-panel',
-                    u.status === 'online' && 'bg-online',
-                    u.status === 'idle' && 'bg-idle',
-                    u.status === 'dnd' && 'bg-dnd',
-                    u.status === 'offline' && 'bg-offline',
-                  )}
-                />
-              </div>
-              <span className="text-[15px] truncate text-left flex-1">{u.username}</span>
-            </button>
-          ))}
-        </div>
-        <UserPanel />
-      </aside>
-
-      {/* Main — d17 Friends content */}
+      {/* Main */}
       <main className="flex-1 bg-bg flex flex-col min-w-0">
         <header className="h-12 px-4 flex items-center border-b border-rail/60 shadow-elev1 gap-4 text-[15px]">
           <span className="flex items-center gap-2 text-text-mute font-semibold">
@@ -104,58 +81,92 @@ export default function HomeView() {
               )}
             </button>
           ))}
-          <button className="px-3 py-0.5 rounded bg-success text-white text-[14px] font-medium hover:bg-online/90">
+          <button
+            onClick={() => setAddFriend(true)}
+            className="px-3 py-0.5 rounded bg-online text-white text-[14px] font-medium hover:bg-online/90"
+          >
             Add Friend
           </button>
           <div className="ml-auto flex items-center gap-3 text-text-sub">
-            <button className="p-1 hover:text-text-hi" title="Active Now">
+            <button
+              onClick={() => flash(`${online.length} friends active right now`)}
+              className="p-1 hover:text-text-hi"
+              title="Active Now"
+            >
               <UserCheck size={18} />
             </button>
-            <button className="p-1 hover:text-text-hi" title="Help">
+            <button
+              onClick={() => flash('Hover a friend row to message or call')}
+              className="p-1 hover:text-text-hi"
+              title="Help"
+            >
               <HelpCircle size={18} />
             </button>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto px-8 pt-6">
-          {/* Search bar */}
+          {/* Search */}
           <div className="relative mb-6 max-w-2xl">
             <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Search"
-              className="w-full bg-rail rounded h-7 px-3 pr-9 text-[13px] text-text-body placeholder:text-text-sub outline-none focus:ring-1 focus:ring-brand"
+              className="w-full bg-rail rounded h-7 px-3 pr-9 text-[13px] leading-5 text-text-body placeholder:text-text-sub outline-none focus:ring-1 focus:ring-brand"
             />
             <Search size={16} className="absolute right-2 top-1.5 text-text-sub" />
           </div>
 
-          <h2 className="uppercase tracking-cap text-[12px] font-bold text-text-mute mb-4">
-            {tab} — {list.length}
+          <h2 className="uppercase tracking-cap text-[12px] font-bold text-text-mute leading-4 mb-4">
+            {tab} — {filtered.length}
           </h2>
 
-          {list.length === 0 && (
-            <EmptyFriends tab={tab} />
+          {filtered.length === 0 && (
+            <EmptyFriends tab={tab} hasSearch={search.length > 0} />
           )}
 
           <div className="flex flex-col">
-            {list.map((u) => (
-              <FriendRow key={u.id} u={u} />
+            {filtered.map((u) => (
+              <FriendRow
+                key={u.id}
+                u={u}
+                onMessage={() => openDM(u.id)}
+                onCall={() => openDM(u.id, true)}
+                onMore={() => flash(`More actions for ${u.username}`)}
+              />
             ))}
           </div>
         </div>
       </main>
+
+      {addFriend && <AddFriendModal onClose={() => setAddFriend(false)} onResult={flash} />}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-rail border border-divider/60 text-text-hi text-[14px] px-4 py-2 rounded shadow-elev1 z-50">
+          {toast}
+        </div>
+      )}
     </>
   )
 }
 
-function FriendRow({ u }: { u: FriendUser }) {
+function FriendRow({
+  u,
+  onMessage,
+  onCall,
+  onMore,
+}: {
+  u: FriendUser
+  onMessage: () => void
+  onCall: () => void
+  onMore: () => void
+}) {
   return (
-    <div className="group flex items-center gap-3 h-[60px] px-2 mx-[-8px] border-t border-divider/40 hover:bg-hover-a/30 hover:border-transparent rounded transition-colors cursor-pointer">
+    <div
+      onClick={onMessage}
+      className="group flex items-center gap-3 h-[60px] px-2 mx-[-8px] border-t border-divider/40 hover:bg-hover-a/30 hover:border-transparent rounded transition-colors cursor-pointer"
+    >
       <div className="relative shrink-0">
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold text-white"
-          style={{ background: u.avatarColor }}
-        >
-          {u.username[0].toUpperCase()}
-        </div>
+        <Avatar username={u.username} avatarColor={u.avatarColor} avatarUrl={u.avatarUrl} size={32} />
         <span
           className={clsx(
             'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-bg',
@@ -175,21 +186,76 @@ function FriendRow({ u }: { u: FriendUser }) {
           {u.status === 'offline' && 'Offline'}
         </div>
       </div>
-      <button className="opacity-0 group-hover:opacity-100 h-9 w-9 grid place-items-center rounded-full bg-rail text-text-mute hover:text-text-hi" title="Message">
+      <button
+        onClick={(e) => { e.stopPropagation(); onMessage() }}
+        className="opacity-0 group-hover:opacity-100 h-9 w-9 grid place-items-center rounded-full bg-rail text-text-mute hover:text-text-hi"
+        title="Message"
+      >
         <MessageCircle size={18} />
       </button>
-      <button className="opacity-0 group-hover:opacity-100 h-9 w-9 grid place-items-center rounded-full bg-rail text-text-mute hover:text-text-hi" title="More">
+      <button
+        onClick={(e) => { e.stopPropagation(); onCall() }}
+        className="opacity-0 group-hover:opacity-100 h-9 w-9 grid place-items-center rounded-full bg-rail text-text-mute hover:text-online"
+        title="Voice call"
+      >
+        <Phone size={18} />
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onMore() }}
+        className="opacity-0 group-hover:opacity-100 h-9 w-9 grid place-items-center rounded-full bg-rail text-text-mute hover:text-text-hi"
+        title="More"
+      >
         <MoreVertical size={18} />
       </button>
     </div>
   )
 }
 
-function EmptyFriends({ tab }: { tab: string }) {
+function EmptyFriends({ tab, hasSearch }: { tab: string; hasSearch: boolean }) {
   return (
     <div className="grid place-items-center py-16 text-center text-text-sub">
       <Users size={64} className="text-divider mb-4" />
-      <p className="text-[15px]">{tab === 'Pending' ? 'There are no pending friend requests. Here\'s some tumbleweed.' : 'No friends here yet.'}</p>
+      <p className="text-[15px]">
+        {hasSearch
+          ? 'No matches.'
+          : tab === 'Pending'
+            ? 'There are no pending friend requests. Here\'s some tumbleweed.'
+            : 'No friends here yet.'}
+      </p>
+    </div>
+  )
+}
+
+function AddFriendModal({ onClose, onResult }: { onClose: () => void; onResult: (msg: string) => void }) {
+  const [val, setVal] = useState('')
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 grid place-items-center" onClick={onClose}>
+      <div className="bg-panel rounded-lg w-[440px] p-5 relative" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-3 right-3 text-text-sub hover:text-text-hi" title="Close">
+          <X size={18} />
+        </button>
+        <h3 className="text-[20px] font-bold text-text-hi mb-1">Add Friend</h3>
+        <p className="text-[14px] text-text-mute mb-4">You can add friends with their Discord username.</p>
+        <div className="flex items-center gap-2 bg-rail rounded p-1.5">
+          <input
+            autoFocus
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            placeholder="You can add friends with their Discord username."
+            className="flex-1 bg-transparent px-2 h-9 text-[15px] text-text-body placeholder:text-text-sub outline-none"
+          />
+          <button
+            disabled={!val.trim()}
+            onClick={() => {
+              onResult(`Friend request sent to ${val.trim()}`)
+              onClose()
+            }}
+            className="bg-brand hover:bg-brand-hi disabled:opacity-50 disabled:cursor-not-allowed text-white text-[14px] font-medium px-4 h-9 rounded leading-4"
+          >
+            Send Friend Request
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

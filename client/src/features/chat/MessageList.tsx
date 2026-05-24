@@ -91,7 +91,7 @@ export default function MessageList({
         it.kind === 'date' ? (
           <div key={`d-${i}`} className="flex items-center gap-3 px-4 my-4">
             <div className="flex-1 h-px bg-divider/50" />
-            <span className="text-[12px] font-semibold text-text-sub">{fmtDate(it.iso)}</span>
+            <span className="text-[11px] font-semibold text-text-sub leading-[13px]">{fmtDate(it.iso)}</span>
             <div className="flex-1 h-px bg-divider/50" />
           </div>
         ) : (

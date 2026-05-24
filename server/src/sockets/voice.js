@@ -16,12 +16,28 @@ export function wireVoice(io) {
     socket.on('voice:join', async ({ channelId }, ack) => {
       try {
         const ch = await Channel.findById(channelId).lean()
-        if (!ch || ch.type !== 'voice') return ack?.({ ok: false, error: 'Bad channel' })
-        const member = await Membership.findOne({
-          guildId: ch.guildId,
-          userId: new mongoose.Types.ObjectId(userId),
-        }).lean()
-        if (!member) return ack?.({ ok: false, error: 'Not a member' })
+        if (!ch || (ch.type !== 'voice' && ch.type !== 'dm')) return ack?.({ ok: false, error: 'Bad channel' })
+        if (ch.type === 'dm') {
+          if (!ch.participantIds?.some((p) => p.toString() === userId.toString())) {
+            return ack?.({ ok: false, error: 'Not a participant' })
+          }
+          // ring the other participant(s)
+          const others = ch.participantIds
+            .map((p) => p.toString())
+            .filter((id) => id !== userId.toString())
+          for (const otherId of others) {
+            io.to(`user:${otherId}`).emit('dm:incoming-call', {
+              channelId,
+              from: { id: userId, username },
+            })
+          }
+        } else {
+          const member = await Membership.findOne({
+            guildId: ch.guildId,
+            userId: new mongoose.Types.ObjectId(userId),
+          }).lean()
+          if (!member) return ack?.({ ok: false, error: 'Not a member' })
+        }
 
         const key = roomKey(channelId)
         if (!voiceRooms.has(key)) voiceRooms.set(key, new Map())

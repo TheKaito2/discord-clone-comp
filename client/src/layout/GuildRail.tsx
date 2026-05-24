@@ -64,7 +64,7 @@ export default function GuildRail({
       <button
         onClick={onJoinClick}
         className="rail-item bg-panel text-online hover:bg-online hover:text-white"
-        title="Join server with invite code"
+        title="Add a Server"
       >
         <Plus size={20} />
       </button>

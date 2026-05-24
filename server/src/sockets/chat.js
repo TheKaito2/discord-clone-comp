@@ -12,8 +12,12 @@ export function wireChat(io) {
       try {
         const ch = await Channel.findById(channelId).lean()
         if (!ch) return
-        const member = await Membership.findOne({ guildId: ch.guildId, userId }).lean()
-        if (!member) return
+        if (ch.type === 'dm') {
+          if (!ch.participantIds?.some((p) => p.toString() === userId.toString())) return
+        } else {
+          const member = await Membership.findOne({ guildId: ch.guildId, userId }).lean()
+          if (!member) return
+        }
         for (const room of socket.rooms) {
           if (typeof room === 'string' && room.startsWith('chan:')) socket.leave(room)
         }
@@ -32,12 +36,18 @@ export function wireChat(io) {
         const trimmed = String(content || '').trim()
         if (!trimmed) return ack?.({ ok: false, error: 'Empty' })
         const ch = await Channel.findById(channelId).lean()
-        if (!ch || ch.type !== 'text') return ack?.({ ok: false, error: 'Bad channel' })
-        const member = await Membership.findOne({
-          guildId: ch.guildId,
-          userId: new mongoose.Types.ObjectId(userId),
-        }).lean()
-        if (!member) return ack?.({ ok: false, error: 'Not a member' })
+        if (!ch || (ch.type !== 'text' && ch.type !== 'dm')) return ack?.({ ok: false, error: 'Bad channel' })
+        if (ch.type === 'dm') {
+          if (!ch.participantIds?.some((p) => p.toString() === userId.toString())) {
+            return ack?.({ ok: false, error: 'Not a participant' })
+          }
+        } else {
+          const member = await Membership.findOne({
+            guildId: ch.guildId,
+            userId: new mongoose.Types.ObjectId(userId),
+          }).lean()
+          if (!member) return ack?.({ ok: false, error: 'Not a member' })
+        }
 
         const author = await User.findById(userId).lean()
         const msg = await Message.create({
@@ -52,6 +62,7 @@ export function wireChat(io) {
             id: userId,
             username,
             avatarColor: author?.avatarColor || '#888',
+            avatarUrl: author?.avatarUrl || '',
           },
           content: msg.content,
           createdAt: msg.createdAt,

@@ -8,10 +8,14 @@ import { User } from '../models/User.js'
 export function messagesRouter() {
   const r = Router()
 
-  // helper — ensure user is member of channel's guild
+  // helper — ensure user is member of channel's guild OR participant of DM
   async function userCanAccessChannel(userId, channelId) {
     const ch = await Channel.findById(channelId).lean()
     if (!ch) return null
+    if (ch.type === 'dm') {
+      const ok = ch.participantIds?.some((p) => p.toString() === userId.toString())
+      return ok ? ch : null
+    }
     const m = await Membership.findOne({ guildId: ch.guildId, userId }).lean()
     return m ? ch : null
   }
@@ -35,14 +39,14 @@ export function messagesRouter() {
     const userIds = [...new Set(msgs.map((m) => m.authorId.toString()))]
     const users = await User.find({ _id: { $in: userIds } }).lean()
     const byUser = Object.fromEntries(
-      users.map((u) => [u._id.toString(), { id: u._id.toString(), username: u.username, avatarColor: u.avatarColor }]),
+      users.map((u) => [u._id.toString(), { id: u._id.toString(), username: u.username, avatarColor: u.avatarColor, avatarUrl: u.avatarUrl || '' }]),
     )
 
     res.json(
       msgs.reverse().map((m) => ({
         id: m._id.toString(),
         channelId: m.channelId.toString(),
-        author: byUser[m.authorId.toString()] || { id: m.authorId.toString(), username: '?', avatarColor: '#888' },
+        author: byUser[m.authorId.toString()] || { id: m.authorId.toString(), username: '?', avatarColor: '#888', avatarUrl: '' },
         content: m.content,
         editedAt: m.editedAt,
         createdAt: m.createdAt,

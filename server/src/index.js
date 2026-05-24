@@ -13,6 +13,7 @@ import { messagesRouter } from './routes/messages.js'
 import { searchRouter } from './routes/search.js'
 import { invitesRouter } from './routes/invites.js'
 import { discoverRouter } from './routes/discover.js'
+import { dmsRouter } from './routes/dms.js'
 import { requireJwt } from './middleware/auth.js'
 import { wireChat } from './sockets/chat.js'
 import { wireVoice } from './sockets/voice.js'
@@ -40,6 +41,7 @@ app.use('/api', protect, messagesRouter())
 app.use('/api', protect, searchRouter())
 app.use('/api', protect, invitesRouter())
 app.use('/api', protect, discoverRouter())
+app.use('/api', protect, dmsRouter())
 
 const server = http.createServer(app)
 const io = new IOServer(server, {

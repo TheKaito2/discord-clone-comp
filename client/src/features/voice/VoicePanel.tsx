@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Mic, MicOff, Video, VideoOff, MonitorUp, MonitorOff, PhoneOff, Volume2, Headphones, HeadphoneOff } from 'lucide-react'
+import { Mic, MicOff, Video, VideoOff, MonitorUp, MonitorOff, PhoneOff, Headphones, HeadphoneOff, Settings as SettingsIcon, Activity } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useWebRTC, type VoicePeer } from './useWebRTC'
 import { useAuthStore } from '../../store/auth'
 import { useVoiceStore } from '../../store/voice'
+import { useGuilds, useMembers } from '../../lib/queries'
+import Avatar from '../../components/Avatar'
 import clsx from 'clsx'
 
 export default function VoicePanel({ channelId, channelName }: { channelId: string; channelName: string }) {
@@ -11,6 +14,14 @@ export default function VoicePanel({ channelId, channelName }: { channelId: stri
   const joinedRef = useRef<string | null>(null)
   const [denied, setDenied] = useState<string | null>(null)
   const speaking = useVoiceStore((s) => s.speakingUsers)
+  const { guildId } = useParams()
+  const nav = useNavigate()
+  const guilds = useGuilds()
+  const members = useMembers(guildId)
+  const memberByUserId = (members.data || []).reduce<Record<string, { avatarUrl?: string; avatarColor: string }>>((acc, m) => {
+    acc[m.id] = { avatarUrl: m.avatarUrl, avatarColor: m.avatarColor }
+    return acc
+  }, {})
 
   useEffect(() => {
     if (joinedRef.current === channelId) return
@@ -21,98 +32,180 @@ export default function VoicePanel({ channelId, channelName }: { channelId: stri
     })
     return () => {
       rtc.leave()
+      joinedRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelId])
 
+  function handleLeave() {
+    rtc.leave()
+    joinedRef.current = null
+    // navigate to first text channel in guild — ServerView's effect redirects if needed
+    if (guildId) {
+      const g = guilds.data?.find((x) => x.id === guildId)
+      const firstText = g?.channels.find((c) => c.type === 'text')
+      nav(firstText ? `/app/${guildId}/${firstText.id}` : `/app/${guildId}`, { replace: true })
+    } else {
+      nav('/app/home', { replace: true })
+    }
+  }
+
   const errorMsg = rtc.error || denied
+  const tileCount = rtc.peers.length + 1
+  // Discord-style auto-grid: 1 = full, 2 = 2col, 3-4 = 2x2, 5-9 = 3xN
+  const cols = tileCount <= 1 ? 1 : tileCount <= 4 ? 2 : 3
 
   return (
-    <div className="flex-1 flex flex-col bg-gradient-to-b from-bg-grad to-bg p-6 overflow-hidden">
-      <div className="flex items-center gap-2 mb-4">
-        <Volume2 size={18} className="text-text-sub" />
-        <span className="text-text-hi font-semibold">{channelName}</span>
-        <span className="ml-3 text-xs">
-          {errorMsg ? (
-            <span className="text-danger">{errorMsg}</span>
-          ) : rtc.connected ? (
-            <span className="text-online">● Voice connected — {rtc.peers.length + 1} in call</span>
-          ) : (
-            <span className="text-text-sub">Connecting…</span>
-          )}
-        </span>
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <Tile
-            stream={rtc.localStream}
-            muted
-            speaking={speaking.has('self')}
-            micOff={!rtc.micOn}
-            peer={{
-              socketId: 'self',
-              userId: me?.id || 'self',
-              username: (me?.username || 'You') + ' (you)',
+    <div className="flex-1 flex flex-col bg-[#1E1F22] min-h-0 relative overflow-hidden">
+      {/* Stage */}
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-4 gap-2">
+        {errorMsg ? (
+          <div className="text-center max-w-md">
+            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-danger/20 grid place-items-center">
+              <MicOff size={36} className="text-danger" />
+            </div>
+            <div className="text-[20px] font-bold text-text-hi mb-2">{errorMsg}</div>
+            <p className="text-text-mute text-[14px] mb-4">Grant microphone access in your browser to join voice channels.</p>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => location.reload()}
+                className="bg-brand hover:bg-brand-hi text-white px-4 h-9 rounded text-[14px] font-medium"
+              >
+                Retry
+              </button>
+              <button
+                onClick={handleLeave}
+                className="bg-rail hover:bg-hover-a text-text-hi px-4 h-9 rounded text-[14px] font-medium"
+              >
+                Leave channel
+              </button>
+            </div>
+          </div>
+        ) : !rtc.connected ? (
+          <div className="text-center">
+            <div className="w-20 h-20 mx-auto mb-3 rounded-full bg-online/20 grid place-items-center animate-pulse">
+              <Activity size={36} className="text-online" />
+            </div>
+            <div className="text-[16px] font-semibold text-text-hi">Connecting to voice…</div>
+            <div className="text-text-mute text-[13px] mt-1">#{channelName}</div>
+          </div>
+        ) : (
+          <div
+            className="grid gap-2 w-full h-full place-content-center"
+            style={{
+              gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+              maxWidth: cols === 1 ? 720 : cols === 2 ? 1100 : 1400,
             }}
-            isYou
-          />
-          {rtc.peers.map((p) => (
+          >
             <Tile
-              key={p.socketId}
-              peer={p}
-              stream={p.stream}
-              speaking={speaking.has(p.userId)}
-              deafened={rtc.deafened}
+              key="self"
+              stream={rtc.localStream}
+              mediaVer={rtc.mediaVer}
+              muted
+              speaking={speaking.has('self') && rtc.micOn}
+              micOff={!rtc.micOn}
+              screen={rtc.screenOn}
+              peer={{
+                socketId: 'self',
+                userId: me?.id || 'self',
+                username: me?.username || 'You',
+              }}
+              avatarColor={me?.avatarColor}
+              avatarUrl={me?.avatarUrl}
+              isYou
             />
-          ))}
-        </div>
+            {rtc.peers.map((p) => (
+              <Tile
+                key={p.socketId}
+                peer={p}
+                stream={p.stream}
+                mediaVer={rtc.mediaVer}
+                speaking={speaking.has(p.userId)}
+                deafened={rtc.deafened}
+                avatarColor={memberByUserId[p.userId]?.avatarColor}
+                avatarUrl={memberByUserId[p.userId]?.avatarUrl}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="mt-6 flex justify-center gap-3">
-        <ToolbarBtn label={rtc.micOn ? 'Mute' : 'Unmute'} onClick={rtc.toggleMic} on={rtc.micOn}>
-          {rtc.micOn ? <Mic size={20} /> : <MicOff size={20} />}
-        </ToolbarBtn>
-        <ToolbarBtn label={rtc.deafened ? 'Undeafen' : 'Deafen'} onClick={rtc.toggleDeafen} on={!rtc.deafened}>
-          {rtc.deafened ? <HeadphoneOff size={20} /> : <Headphones size={20} />}
-        </ToolbarBtn>
-        <ToolbarBtn label={rtc.camOn ? 'Stop video' : 'Start video'} onClick={rtc.toggleCam} on={rtc.camOn}>
-          {rtc.camOn ? <Video size={20} /> : <VideoOff size={20} />}
-        </ToolbarBtn>
-        <ToolbarBtn label={rtc.screenOn ? 'Stop share' : 'Share screen'} onClick={rtc.toggleScreen} on={rtc.screenOn}>
-          {rtc.screenOn ? <MonitorOff size={20} /> : <MonitorUp size={20} />}
-        </ToolbarBtn>
-        <button
-          onClick={rtc.leave}
-          className="h-10 w-10 grid place-items-center rounded-full bg-danger text-white hover:bg-err-bright"
-          title="Disconnect"
-        >
-          <PhoneOff size={18} />
-        </button>
-      </div>
+      {/* Bottom control rail — Discord style pill */}
+      {rtc.connected && (
+        <div className="shrink-0 px-4 pb-5 pt-2 flex justify-center">
+          <div className="bg-[#232428] rounded-full px-2 py-1.5 flex items-center gap-1 shadow-elev1">
+            <CtrlBtn
+              title={rtc.camOn ? 'Stop video' : 'Start video'}
+              onClick={rtc.toggleCam}
+              active={rtc.camOn}
+            >
+              {rtc.camOn ? <Video size={20} /> : <VideoOff size={20} />}
+            </CtrlBtn>
+            <CtrlBtn
+              title={rtc.screenOn ? 'Stop sharing' : 'Share your screen'}
+              onClick={rtc.toggleScreen}
+              active={rtc.screenOn}
+            >
+              {rtc.screenOn ? <MonitorOff size={20} /> : <MonitorUp size={20} />}
+            </CtrlBtn>
+            <div className="w-px h-6 bg-divider/60 mx-1" />
+            <CtrlBtn
+              title={rtc.micOn ? 'Mute' : 'Unmute'}
+              onClick={rtc.toggleMic}
+              danger={!rtc.micOn}
+            >
+              {rtc.micOn ? <Mic size={20} /> : <MicOff size={20} />}
+            </CtrlBtn>
+            <CtrlBtn
+              title={rtc.deafened ? 'Undeafen' : 'Deafen'}
+              onClick={rtc.toggleDeafen}
+              danger={rtc.deafened}
+            >
+              {rtc.deafened ? <HeadphoneOff size={20} /> : <Headphones size={20} />}
+            </CtrlBtn>
+            <CtrlBtn title="Settings" onClick={() => {}}>
+              <SettingsIcon size={20} />
+            </CtrlBtn>
+            <div className="w-px h-6 bg-divider/60 mx-1" />
+            <button
+              onClick={handleLeave}
+              title="Disconnect"
+              className="h-10 w-10 grid place-items-center rounded-full bg-danger hover:bg-err-bright text-white transition-colors"
+            >
+              <PhoneOff size={18} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function ToolbarBtn({
+function CtrlBtn({
   children,
-  on,
-  label,
+  title,
   onClick,
+  active,
+  danger,
 }: {
   children: React.ReactNode
-  on: boolean
-  label: string
+  title: string
   onClick: () => void
+  active?: boolean
+  danger?: boolean
 }) {
   return (
     <button
-      title={label}
       onClick={onClick}
-      className={
-        'h-10 w-10 grid place-items-center rounded-full transition-colors ' +
-        (on ? 'bg-[#3F4147] text-text-hi hover:bg-[#4E5058]' : 'bg-danger text-white hover:bg-err-bright')
-      }
+      title={title}
+      className={clsx(
+        'h-10 w-10 grid place-items-center rounded-full transition-colors',
+        danger
+          ? 'bg-danger/15 text-danger hover:bg-danger/25'
+          : active
+            ? 'bg-text-hi text-bg hover:bg-text-mute'
+            : 'text-text-mute hover:bg-hover-a hover:text-text-hi',
+      )}
     >
       {children}
     </button>
@@ -122,39 +215,65 @@ function ToolbarBtn({
 function Tile({
   peer,
   stream,
+  mediaVer,
   muted,
   isYou,
   speaking,
   micOff,
   deafened,
+  screen,
+  avatarColor,
+  avatarUrl,
 }: {
   peer: VoicePeer
   stream?: MediaStream | null
+  mediaVer: number
   muted?: boolean
   isYou?: boolean
   speaking?: boolean
   micOff?: boolean
   deafened?: boolean
+  screen?: boolean
+  avatarColor?: string
+  avatarUrl?: string
 }) {
   const vref = useRef<HTMLVideoElement>(null)
   const aref = useRef<HTMLAudioElement>(null)
-  useEffect(() => {
-    if (vref.current && stream) vref.current.srcObject = stream
-  }, [stream])
-  useEffect(() => {
-    if (aref.current && stream) {
-      aref.current.srcObject = stream
-      aref.current.muted = !!deafened || !!muted
-    }
-  }, [stream, deafened, muted])
 
-  const hasVideo = !!stream?.getVideoTracks().some((t) => t.enabled !== false && t.readyState === 'live')
+  // pick the latest live video track; re-evaluate whenever mediaVer bumps
+  const liveVideo = stream?.getVideoTracks().find((t) => t.readyState === 'live' && t.enabled !== false)
+  const hasVideo = !!liveVideo
+  const trackId = liveVideo?.id
+
+  // Attach / reattach srcObject every time stream OR its track set changes.
+  // Setting srcObject = null first is critical: Chrome will not start
+  // rendering a newly-added video track on an existing srcObject otherwise.
+  useEffect(() => {
+    const el = vref.current
+    if (!el || !stream) return
+    el.srcObject = null
+    el.srcObject = stream
+    const p = el.play()
+    if (p && typeof p.catch === 'function') p.catch(() => {})
+  }, [stream, trackId, mediaVer, hasVideo])
+
+  useEffect(() => {
+    const el = aref.current
+    if (!el || !stream) return
+    el.srcObject = null
+    el.srcObject = stream
+    el.muted = !!deafened || !!muted
+    const p = el.play()
+    if (p && typeof p.catch === 'function') p.catch(() => {})
+  }, [stream, deafened, muted, mediaVer])
 
   return (
     <div
       className={clsx(
-        'relative bg-[#2B2D31] rounded-lg aspect-video overflow-hidden flex items-center justify-center transition',
-        speaking ? 'ring-2 ring-online' : 'ring-2 ring-transparent',
+        'relative rounded-lg overflow-hidden grid place-items-center transition-shadow',
+        'min-h-[180px] aspect-video bg-[#000000]',
+        speaking && 'ring-2 ring-online shadow-[0_0_0_2px_rgba(35,165,89,0.4)]',
+        !speaking && 'ring-1 ring-rail',
       )}
     >
       {hasVideo ? (
@@ -163,26 +282,38 @@ function Tile({
           muted={!!muted}
           autoPlay
           playsInline
-          className="w-full h-full object-cover"
+          className={clsx(
+            'w-full h-full',
+            screen ? 'object-contain bg-black' : 'object-cover',
+          )}
         />
       ) : (
-        <div className="text-center">
-          <div
-            className="w-20 h-20 rounded-full mx-auto grid place-items-center text-3xl font-bold text-white"
-            style={{ background: '#5865F2' }}
-          >
-            {peer.username?.[0]?.toUpperCase()}
-          </div>
+        <div className="grid place-items-center">
+          <Avatar
+            username={peer.username}
+            avatarColor={avatarColor}
+            avatarUrl={avatarUrl}
+            size={88}
+            className="shadow-elev1 text-4xl"
+          />
         </div>
       )}
-      {/* always-on audio element for remote peers (hidden) */}
-      {stream && !muted && (
-        <audio ref={aref} autoPlay />
-      )}
-      <div className="absolute bottom-2 left-2 right-2 bg-black/60 rounded px-2 py-1 text-xs text-text-hi flex items-center gap-1">
-        <span className="truncate">{peer.username}</span>
-        {micOff && <MicOff size={12} className="text-danger ml-1" />}
-        {isYou && <span className="text-text-sub ml-auto">you</span>}
+
+      {/* hidden remote audio (local Tile is muted via `muted` prop) */}
+      {stream && !muted && <audio ref={aref} autoPlay />}
+
+      {/* bottom label */}
+      <div className="absolute bottom-2 left-2 right-2 flex items-center gap-1.5 pointer-events-none">
+        <div className="bg-black/70 rounded px-1.5 py-0.5 flex items-center gap-1.5 text-[13px] text-text-hi font-medium max-w-full">
+          {micOff && <MicOff size={12} className="text-danger shrink-0" />}
+          {!micOff && speaking && <span className="w-1.5 h-1.5 rounded-full bg-online shrink-0" />}
+          <span className="truncate">{peer.username}{isYou && ' (you)'}</span>
+        </div>
+        {screen && (
+          <div className="bg-online/90 rounded px-1.5 py-0.5 text-[11px] text-white font-semibold">
+            LIVE
+          </div>
+        )}
       </div>
     </div>
   )

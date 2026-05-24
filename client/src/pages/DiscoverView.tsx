@@ -80,7 +80,7 @@ export default function DiscoverView() {
         {/* Hero */}
         <div className="bg-gradient-to-br from-brand to-mention px-10 pt-12 pb-16">
           <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-[40px] font-bold text-white leading-tight">Find your community on Cordis</h1>
+            <h1 className="text-[40px] font-bold text-white leading-tight">Find your community on Discord</h1>
             <p className="text-white/80 text-[15px] mt-3 mb-6">
               From gaming and music to school and study help — there's a place for you.
             </p>

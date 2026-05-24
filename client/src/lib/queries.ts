@@ -22,12 +22,13 @@ export type Member = {
   id: string
   username: string
   avatarColor: string
+  avatarUrl?: string
   status: 'online' | 'idle' | 'dnd' | 'offline'
 }
 export type ChatMessage = {
   id: string
   channelId: string
-  author: { id: string; username: string; avatarColor: string }
+  author: { id: string; username: string; avatarColor: string; avatarUrl?: string }
   content: string
   createdAt: string
   editedAt: string | null
@@ -48,6 +49,29 @@ export function useMembers(guildId: string | undefined) {
     enabled: !!guildId,
     queryFn: async () =>
       (await api.get<Member[]>(`/guilds/${guildId}/members`)).data,
+  })
+}
+
+export type DMUser = {
+  id: string
+  username: string
+  displayName?: string
+  avatarColor: string
+  avatarUrl?: string
+  status: 'online' | 'idle' | 'dnd' | 'offline'
+}
+export type DM = {
+  id: string
+  type: 'dm'
+  other: DMUser
+  lastMessageAt: string
+  createdAt?: string
+}
+
+export function useDMs() {
+  return useQuery({
+    queryKey: ['dms'],
+    queryFn: async () => (await api.get<DM[]>('/me/dms')).data,
   })
 }
 

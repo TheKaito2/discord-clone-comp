@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Search, X } from 'lucide-react'
 import { api } from '../../lib/api'
+import Avatar from '../../components/Avatar'
 
 type Hit = {
   id: string
   channelId: string
   channelName: string
-  author: { id: string; username: string; avatarColor: string }
+  author: { id: string; username: string; avatarColor: string; avatarUrl?: string }
   content: string
   createdAt: string
 }
@@ -87,12 +88,7 @@ export default function SearchOverlay({ onClose }: { onClose: () => void }) {
               }}
               className="w-full text-left px-4 py-3 flex gap-3 hover:bg-hover-a border-b border-rail/30 last:border-b-0"
             >
-              <div
-                className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-sm font-semibold text-white"
-                style={{ background: h.author.avatarColor }}
-              >
-                {h.author.username[0].toUpperCase()}
-              </div>
+              <Avatar username={h.author.username} avatarColor={h.author.avatarColor} avatarUrl={h.author.avatarUrl} size={36} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
                   <span className="text-text-hi font-medium text-sm">{h.author.username}</span>

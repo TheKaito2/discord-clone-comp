@@ -1,10 +1,13 @@
 import { useEffect, useState, useRef } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Phone, PhoneOff } from 'lucide-react'
+import { sfx } from '../lib/sfx'
 import GuildRail from '../layout/GuildRail'
 import { useGuilds } from '../lib/queries'
 import { getSocket } from '../lib/socket'
 import SearchOverlay from '../features/search/SearchOverlay'
 import JoinModal from '../features/invite/JoinModal'
+import CreateServerModal from '../features/invite/CreateServerModal'
 import { useVoiceRosterSync } from '../features/voice/useVoiceRosterSync'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -27,10 +30,14 @@ export default function AppLayout() {
   const loc = useLocation()
   const [showSearch, setShowSearch] = useState(false)
   const [showJoin, setShowJoin] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
 
   const qc = useQueryClient()
   const qcRef = useRef(qc)
   qcRef.current = qc
+  const nav = useNavigate()
+  const [incoming, setIncoming] = useState<{ channelId: string; from: { id: string; username: string } } | null>(null)
+  const incomingTimer = useRef<number | null>(null)
 
   useVoiceRosterSync()
 
@@ -57,8 +64,19 @@ export default function AppLayout() {
         )
       }
     }
+    function onIncomingCall(p: { channelId: string; from: { id: string; username: string } }) {
+      setIncoming(p)
+      sfx.play('outgoing')
+      if (incomingTimer.current) clearTimeout(incomingTimer.current)
+      incomingTimer.current = window.setTimeout(() => setIncoming(null), 20000)
+    }
     s.on('presence:update', onPresence)
-    return () => { s.off('presence:update', onPresence) }
+    s.on('dm:incoming-call', onIncomingCall)
+    return () => {
+      s.off('presence:update', onPresence)
+      s.off('dm:incoming-call', onIncomingCall)
+      if (incomingTimer.current) clearTimeout(incomingTimer.current)
+    }
   }, [])
 
   // ⌘K
@@ -80,10 +98,41 @@ export default function AppLayout() {
   return (
     <ModalCtx.Provider value={{ showSearch, showJoin, setShowSearch, setShowJoin }}>
       <div className="h-screen flex bg-rail text-text-body" data-path={loc.pathname}>
-        <GuildRail guilds={guilds.data || []} onJoinClick={() => setShowJoin(true)} />
+        <GuildRail guilds={guilds.data || []} onJoinClick={() => setShowCreate(true)} />
         <Outlet />
         {showSearch && <SearchOverlay onClose={() => setShowSearch(false)} />}
         {showJoin && <JoinModal onClose={() => setShowJoin(false)} />}
+        {showCreate && (
+          <CreateServerModal
+            onClose={() => setShowCreate(false)}
+            onOpenJoin={() => setShowJoin(true)}
+          />
+        )}
+        {incoming && (
+          <div className="fixed bottom-6 right-6 z-50 w-80 bg-panel border border-divider/60 rounded-lg shadow-elev1 overflow-hidden">
+            <div className="px-4 py-3 border-b border-divider/60">
+              <div className="text-text-sub text-[11px] uppercase tracking-cap font-semibold">Incoming Call</div>
+              <div className="text-text-hi text-[15px] font-semibold mt-0.5">{incoming.from.username}</div>
+            </div>
+            <div className="px-4 py-3 flex gap-2">
+              <button
+                onClick={() => {
+                  nav(`/app/dm/${incoming.channelId}?call=1`)
+                  setIncoming(null)
+                }}
+                className="flex-1 h-9 rounded bg-online hover:bg-online/90 text-white text-[14px] font-medium flex items-center justify-center gap-1.5"
+              >
+                <Phone size={16} /> Accept
+              </button>
+              <button
+                onClick={() => setIncoming(null)}
+                className="flex-1 h-9 rounded bg-danger hover:bg-err-bright text-white text-[14px] font-medium flex items-center justify-center gap-1.5"
+              >
+                <PhoneOff size={16} /> Decline
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </ModalCtx.Provider>
   )

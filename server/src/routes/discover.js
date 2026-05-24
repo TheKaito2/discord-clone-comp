@@ -33,12 +33,13 @@ export function discoverRouter() {
 
   // GET /api/users — list all users (for Friends view)
   r.get('/users', async (_req, res) => {
-    const users = await User.find({}).select('username avatarColor status lastSeenAt').lean()
+    const users = await User.find({}).select('username avatarColor avatarUrl status lastSeenAt').lean()
     res.json(
       users.map((u) => ({
         id: u._id.toString(),
         username: u.username,
         avatarColor: u.avatarColor,
+        avatarUrl: u.avatarUrl || '',
         status: u.status,
         lastSeenAt: u.lastSeenAt,
       })),

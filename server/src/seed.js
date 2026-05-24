@@ -24,7 +24,12 @@ await Promise.all([
 const userNames = ['alice', 'bob', 'carol', 'dave', 'eve', 'frank']
 const pwHash = await bcrypt.hash('password', 10)
 const users = await User.insertMany(
-  userNames.map((u) => ({ username: u, passwordHash: pwHash, status: 'online' })),
+  userNames.map((u) => ({
+    username: u,
+    passwordHash: pwHash,
+    status: 'online',
+    avatarUrl: `/avatars/${u}.jpg`,
+  })),
 )
 const userByName = Object.fromEntries(users.map((u) => [u.username, u]))
 

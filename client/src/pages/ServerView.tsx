@@ -14,8 +14,18 @@ import { useModals } from './AppLayout'
 export default function ServerView() {
   const { guildId, channelId } = useParams()
   const nav = useNavigate()
-  const [showMembers, setShowMembers] = useState(true)
+  // default members panel ON above lg (1024px), OFF below
+  const [showMembers, setShowMembers] = useState(() =>
+    typeof window === 'undefined' ? true : window.matchMedia('(min-width: 1024px)').matches,
+  )
   const { setShowSearch } = useModals()
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    function handle(e: MediaQueryListEvent) { setShowMembers(e.matches) }
+    mq.addEventListener('change', handle)
+    return () => mq.removeEventListener('change', handle)
+  }, [])
 
   const guilds = useGuilds()
   const members = useMembers(guildId)
@@ -67,7 +77,7 @@ export default function ServerView() {
               ) : (
                 <Hash size={24} className="text-text-dim shrink-0" />
               )}
-              <span className="font-semibold text-[15px] text-text-hi leading-5">{channel.name}</span>
+              <span className="font-semibold text-[16px] text-text-hi leading-5">{channel.name}</span>
               {channel.topic && (
                 <>
                   <span className="w-px h-4 bg-divider/60 mx-1" />
