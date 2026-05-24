@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body {
+    @apply bg-bg text-text-body font-sans antialiased;
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: #1A1B1E;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #2E2F33; }
+}
+
+@layer components {
+  .cap {
+    @apply uppercase tracking-cap text-[12px] font-semibold text-text-sub leading-4;
+  }
+  .chan-row {
+    @apply flex items-center gap-1.5 h-8 px-2 mx-2 rounded-[4px] text-text-sub cursor-pointer transition-colors;
+  }
+  .chan-row:hover {
+    @apply bg-hover-a text-text-mute;
+  }
+  .chan-row.active {
+    @apply bg-active-a text-text-hi;
+  }
+  .rail-item {
+    @apply relative w-12 h-12 rounded-full bg-panel text-text-hi flex items-center justify-center cursor-pointer transition-all duration-200 overflow-hidden;
+  }
+  .rail-item:hover {
+    @apply rounded-2xl bg-brand;
+  }
+  .rail-item.active {
+    @apply rounded-2xl bg-brand;
+  }
+}
