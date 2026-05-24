@@ -24,10 +24,20 @@ declare module 'simple-peer' {
     initiator?: boolean
     trickle?: boolean
     stream?: MediaStream
+    config?: RTCConfiguration
   }
 
   const SimplePeer: {
     new (opts?: Options): Instance
   }
   export default SimplePeer
+}
+
+declare module 'process' {
+  const process: {
+    nextTick: (callback: (...args: unknown[]) => void, ...args: unknown[]) => void
+    env: Record<string, string | undefined>
+    browser: boolean
+  } & Record<string, unknown>
+  export default process
 }

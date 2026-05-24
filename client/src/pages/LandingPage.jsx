@@ -3,6 +3,7 @@ import { Download, Menu, ChevronDown } from 'lucide-react';
 import '../landing.css';
 
 const navItems = ['Download', 'Nitro', 'Discover', 'Safety', 'Support', 'Blog', 'Careers'];
+const OPEN_DISCORD_HREF = '/login';
 
 const sections = [
   {
@@ -51,7 +52,7 @@ function Header() {
           </a>
         ))}
       </nav>
-      <a className="open-button open-button--light" href="/login">
+      <a className="open-button open-button--light" href={OPEN_DISCORD_HREF}>
         Open Discord
       </a>
       <button className="menu-button" aria-label="Open navigation">
@@ -77,7 +78,7 @@ function Hero() {
             <Download size={18} strokeWidth={2.2} />
             Download for Windows
           </a>
-          <a className="browser-button" href="#browser">
+          <a className="browser-button" href={OPEN_DISCORD_HREF}>
             Open Discord in your browser
           </a>
         </div>
@@ -161,7 +162,7 @@ function Footer() {
         </div>
         <div className="footer-bottom">
           <img src="/assets/discord-logo.svg" alt="Discord" />
-          <a className="open-button open-button--blue" href="/login">
+          <a className="open-button open-button--blue" href={OPEN_DISCORD_HREF}>
             Open Discord
           </a>
         </div>

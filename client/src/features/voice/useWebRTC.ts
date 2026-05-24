@@ -27,6 +27,18 @@ type PeerExt = PeerInstance & {
   replaceTrack: (o: MediaStreamTrack, n: MediaStreamTrack, s: MediaStream) => void
 }
 
+// Produces a valid-but-silent MediaStream so simple-peer can negotiate even without mic
+function makeSilentStream(ctx: AudioContext): MediaStream {
+  const oscillator = ctx.createOscillator()
+  const gain = ctx.createGain()
+  const dst = ctx.createMediaStreamDestination()
+  gain.gain.value = 0
+  oscillator.connect(gain)
+  gain.connect(dst)
+  oscillator.start()
+  return dst.stream
+}
+
 export function useWebRTC(channelId: string | undefined) {
   const [connected, setConnected] = useState(false)
   const [peers, setPeers] = useState<Record<string, VoicePeer>>({})
@@ -35,6 +47,8 @@ export function useWebRTC(channelId: string | undefined) {
   const [camOn, setCamOn] = useState(false)
   const [screenOn, setScreenOn] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [micAvailable, setMicAvailable] = useState(false)
+  const [micError, setMicError] = useState<string | null>(null)
   // bumped whenever local OR remote stream tracks change — forces Tile re-render
   const [mediaVer, setMediaVer] = useState(0)
 
@@ -106,6 +120,8 @@ export function useWebRTC(channelId: string | undefined) {
     setScreenOn(false)
     setMicOn(true)
     setDeafened(false)
+    setMicAvailable(false)
+    setMicError(null)
     setStoreMicOn(true)
     setStoreDeafened(false)
     setActive(null)
@@ -125,8 +141,20 @@ export function useWebRTC(channelId: string | undefined) {
   // ── peer builder ──────────────────────────────────────────────────────────
   const buildPeer = useCallback(
     (initiator: boolean, target: { socketId: string; userId: string; username: string }) => {
-      const stream = localStreamRef.current!
-      const peer = new SimplePeer({ initiator, trickle: true, stream })
+      const currentSocketId = getSocket().id
+      const stream = localStreamRef.current
+      if (!stream || target.socketId === currentSocketId || peerInstances.current[target.socketId]) return
+      const peer = new SimplePeer({
+        initiator,
+        trickle: true,
+        stream,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+          ],
+        },
+      })
 
       const onRemoteStream = (remote: MediaStream) => {
         setPeers((s) => ({
@@ -135,8 +163,6 @@ export function useWebRTC(channelId: string | undefined) {
         }))
         attachMeter(target.socketId, remote, target.userId)
         bump()
-        // when the remote's video track gets added/removed later, simple-peer
-        // fires onremovetrack/onaddtrack on the stream itself
         remote.onaddtrack = () => bump()
         remote.onremovetrack = () => bump()
       }
@@ -145,8 +171,6 @@ export function useWebRTC(channelId: string | undefined) {
         getSocket().emit('voice:signal', { toSocketId: target.socketId, signal })
       })
       peer.on('stream', onRemoteStream)
-      // simple-peer ≥9 fires per-track event so we know new tracks arrived after
-      // initial negotiation (e.g. when a peer turns on camera/screen share later)
       peer.on('track', (_track: MediaStreamTrack, remote: MediaStream) => {
         setPeers((s) => ({
           ...s,
@@ -175,37 +199,89 @@ export function useWebRTC(channelId: string | undefined) {
   const join = useCallback(
     async (chId: string) => {
       setError(null)
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: AUDIO_CONSTRAINTS,
-          video: false,
-        })
-        localStreamRef.current = stream
-        senderTracks.current.audio = stream.getAudioTracks()[0]
-        attachMeter('self', stream, 'self')
+      setMicError(null)
 
-        const s = getSocket()
-        const ack: JoinAck = await new Promise((resolve) => {
-          s.emit('voice:join', { channelId: chId }, resolve)
-        })
-        if (!ack.ok) {
-          cleanup()
-          setError(ack.error || 'Could not join')
-          return
-        }
-        setConnected(true)
-        setActive(chId)
-        sfx.play(ack.peers.length === 0 ? 'outgoing' : 'voice-join')
-        ack.peers.forEach((p) => buildPeer(true, p))
-        bump()
-      } catch (e) {
-        const err = e as Error
-        setError(err?.name === 'NotAllowedError' ? 'Microphone permission denied' : err?.message || 'Could not start voice')
-        cleanup()
+      let stream: MediaStream
+      let hasMic = false
+
+      try {
+        // Use the original stream from getUserMedia — do NOT extract the track,
+        // keeping the stream alive prevents the browser from stopping the track.
+        stream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS, video: false })
+        hasMic = true
+      } catch {
+        // Fall back: join listen-only with a silent stream so simple-peer can
+        // still negotiate and the user can hear others.
+        const ctx = ensureAudioCtx()
+        stream = makeSilentStream(ctx)
+        setMicError('Microphone unavailable')
       }
+
+      localStreamRef.current = stream
+      senderTracks.current.audio = stream.getAudioTracks()[0]
+      setMicAvailable(hasMic)
+      setMicOn(hasMic)
+      setStoreMicOn(hasMic)
+      if (hasMic) attachMeter('self', stream, 'self')
+
+      const s = getSocket()
+      const ack: JoinAck = await new Promise((resolve) => {
+        s.emit('voice:join', { channelId: chId }, resolve)
+      })
+      if (!ack.ok) {
+        cleanup()
+        setError(ack.error || 'Could not join voice channel')
+        return
+      }
+      setConnected(true)
+      setActive(chId)
+      const remotePeers = ack.peers.filter((p) => p.socketId !== s.id)
+      sfx.play(remotePeers.length === 0 ? 'outgoing' : 'voice-join')
+      remotePeers.forEach((p) => buildPeer(true, p))
+      bump()
     },
-    [buildPeer, cleanup, setActive, attachMeter, bump],
+    [ensureAudioCtx, buildPeer, cleanup, setActive, attachMeter, bump, setStoreMicOn],
   )
+
+  // ── request (or re-request) mic ───────────────────────────────────────────
+  const requestMic = useCallback(async () => {
+    let newStream: MediaStream
+    try {
+      newStream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS, video: false })
+    } catch {
+      return  // still can't get mic
+    }
+
+    const newTrack = newStream.getAudioTracks()[0]
+    if (!newTrack) return
+    const local = localStreamRef.current
+    if (!local) return
+
+    const oldTrack = senderTracks.current.audio
+    if (oldTrack) {
+      try { local.removeTrack(oldTrack) } catch { /* ignore */ }
+      oldTrack.stop()
+    }
+    local.addTrack(newTrack)
+    senderTracks.current.audio = newTrack
+
+    Object.values(peerInstances.current).forEach((p) => {
+      try {
+        if (oldTrack) {
+          (p as PeerExt).replaceTrack(oldTrack, newTrack, local)
+        } else {
+          (p as PeerExt).addTrack(newTrack, local)
+        }
+      } catch (e) { console.warn('[requestMic] replaceTrack', e) }
+    })
+
+    attachMeter('self', local, 'self')
+    setMicAvailable(true)
+    setMicOn(true)
+    setStoreMicOn(true)
+    setMicError(null)
+    bump()
+  }, [attachMeter, bump, setStoreMicOn])
 
   const leave = useCallback(() => {
     const s = getSocket()
@@ -219,11 +295,12 @@ export function useWebRTC(channelId: string | undefined) {
     if (!channelId) return
     const s = getSocket()
     function onPeerJoined(p: { socketId: string; userId: string; username: string }) {
-      if (!localStreamRef.current) return
+      if (!localStreamRef.current || p.socketId === s.id || peerInstances.current[p.socketId]) return
       sfx.play('voice-join')
       buildPeer(false, p)
     }
     function onSignal({ fromSocketId, signal }: { fromSocketId: string; signal: SignalData }) {
+      if (fromSocketId === s.id) return
       try { peerInstances.current[fromSocketId]?.signal(signal) } catch (e) { console.warn('[signal]', e) }
     }
     function onPeerLeft({ socketId }: { socketId: string }) {
@@ -252,19 +329,24 @@ export function useWebRTC(channelId: string | undefined) {
 
   // ── toggles ───────────────────────────────────────────────────────────────
   const toggleMic = useCallback(() => {
+    if (!micAvailable) {
+      // attempt to get real mic instead of toggling a silent placeholder
+      requestMic()
+      return
+    }
     const track = senderTracks.current.audio
     if (!track) return
     track.enabled = !track.enabled
     setMicOn(track.enabled)
     setStoreMicOn(track.enabled)
     sfx.play(track.enabled ? 'unmute' : 'mute')
-  }, [setStoreMicOn])
+  }, [micAvailable, requestMic, setStoreMicOn])
 
   const toggleDeafen = useCallback(() => {
     setDeafened((d) => {
       const next = !d
       const t = senderTracks.current.audio
-      if (t) {
+      if (t && micAvailable) {
         t.enabled = !next
         setMicOn(!next)
         setStoreMicOn(!next)
@@ -273,7 +355,7 @@ export function useWebRTC(channelId: string | undefined) {
       sfx.play(next ? 'mute' : 'undeafen')
       return next
     })
-  }, [setStoreDeafened, setStoreMicOn])
+  }, [micAvailable, setStoreDeafened, setStoreMicOn])
 
   // expose toggles globally while in call
   useEffect(() => {
@@ -301,28 +383,31 @@ export function useWebRTC(channelId: string | undefined) {
 
   async function startVideo(mode: 'cam' | 'screen') {
     if (!localStreamRef.current) return
-    // stop whatever is currently active first
     stopVideoTrack()
+    let stream: MediaStream
     try {
-      const stream = mode === 'cam'
+      stream = mode === 'cam'
         ? await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } })
         : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
-      const vt = stream.getVideoTracks()[0]
-      if (!vt) return
-      senderTracks.current.video = vt
-      localStreamRef.current.addTrack(vt)
-      Object.values(peerInstances.current).forEach((p) => {
-        try { (p as PeerExt).addTrack(vt, localStreamRef.current!) } catch (e) { console.warn('addTrack', e) }
-      })
-      vt.onended = () => stopVideoTrack()
-      if (mode === 'cam') setCamOn(true)
-      else setScreenOn(true)
-      bump()
     } catch (e) {
-      console.warn(`[voice] ${mode} denied`, e)
       const err = e as Error
-      if (err?.name !== 'NotAllowedError') setError(`${mode === 'cam' ? 'Camera' : 'Screen share'} failed`)
+      console.warn(`[voice] ${mode} getMedia failed:`, err?.name, err?.message)
+      return
     }
+    const vt = stream.getVideoTracks()[0]
+    if (!vt) {
+      console.warn(`[voice] ${mode} no video track`)
+      return
+    }
+    senderTracks.current.video = vt
+    try { localStreamRef.current.addTrack(vt) } catch (e) { console.warn('[voice] local addTrack', e) }
+    Object.values(peerInstances.current).forEach((p) => {
+      try { (p as PeerExt).addTrack(vt, localStreamRef.current!) } catch (e) { console.warn('[voice] peer addTrack', e) }
+    })
+    vt.onended = () => stopVideoTrack()
+    if (mode === 'cam') setCamOn(true)
+    else setScreenOn(true)
+    bump()
   }
 
   async function toggleCam() {
@@ -338,9 +423,11 @@ export function useWebRTC(channelId: string | undefined) {
     connected,
     peers: Object.values(peers),
     micOn, deafened, camOn, screenOn,
+    micAvailable, micError,
     error,
     join, leave,
     toggleMic, toggleDeafen, toggleCam, toggleScreen,
+    requestMic,
     localStream: localStreamRef.current,
     mediaVer,
   }

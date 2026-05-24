@@ -42,7 +42,22 @@ export function wireVoice(io) {
         const key = roomKey(channelId)
         if (!voiceRooms.has(key)) voiceRooms.set(key, new Map())
         const peers = voiceRooms.get(key)
-        const peerList = [...peers.entries()].map(([sid, info]) => ({ socketId: sid, ...info }))
+
+        // Reconnects/remounts can leave the same user represented by more than
+        // one socket. Keep voice rooms one-entry-per-user so users do not see
+        // themselves twice in the roster or peer grid.
+        for (const [sid, info] of peers.entries()) {
+          if (sid === socket.id || info.userId.toString() === userId.toString()) {
+            peers.delete(sid)
+            if (sid !== socket.id) {
+              io.sockets.sockets.get(sid)?.leave(key)
+              socket.to(key).emit('voice:peer-left', { socketId: sid, userId })
+            }
+          }
+        }
+        const peerList = [...peers.entries()]
+          .filter(([sid]) => sid !== socket.id)
+          .map(([sid, info]) => ({ socketId: sid, ...info }))
 
         socket.join(key)
         peers.set(socket.id, { userId, username })
@@ -88,10 +103,13 @@ export function wireVoice(io) {
       peers.delete(s.id)
       s.leave(key)
       s.to(key).emit('voice:peer-left', { socketId: s.id, userId })
-      io.to(key).emit('voice:roster', {
+      const updatedRoster = {
         channelId,
         members: [...peers.entries()].map(([sid, info]) => ({ socketId: sid, ...info })),
-      })
+      }
+      io.to(key).emit('voice:roster', updatedRoster)
+      // Send updated roster to the leaver too so their sidebar clears immediately
+      s.emit('voice:roster', updatedRoster)
       if (peers.size === 0) voiceRooms.delete(key)
     }
   })

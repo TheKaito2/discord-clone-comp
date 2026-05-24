@@ -13,11 +13,15 @@ export function discoverRouter() {
     const counts = await Membership.aggregate([
       { $group: { _id: '$guildId', n: { $sum: 1 } } },
     ])
-    const countMap = Object.fromEntries(counts.map((c) => [c._id.toString(), c.n]))
+    const countMap = Object.fromEntries(
+      counts.filter((c) => c._id).map((c) => [c._id.toString(), c.n]),
+    )
     const channelCounts = await Channel.aggregate([
       { $group: { _id: '$guildId', n: { $sum: 1 } } },
     ])
-    const chanMap = Object.fromEntries(channelCounts.map((c) => [c._id.toString(), c.n]))
+    const chanMap = Object.fromEntries(
+      channelCounts.filter((c) => c._id).map((c) => [c._id.toString(), c.n]),
+    )
     res.json(
       guilds.map((g) => ({
         id: g._id.toString(),

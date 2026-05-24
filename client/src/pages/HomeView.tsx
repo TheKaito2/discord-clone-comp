@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Users, UserCheck, UserPlus, MessageCircle, MoreVertical, HelpCircle, Search, X, Phone } from 'lucide-react'
+import { Users, UserCheck, MessageCircle, MoreVertical, HelpCircle, Search, X, Phone } from 'lucide-react'
 import clsx from 'clsx'
 import { api } from '../lib/api'
 import { useAuthStore } from '../store/auth'

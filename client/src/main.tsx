@@ -1,5 +1,7 @@
 import { Buffer } from 'buffer'
-;(window as unknown as { Buffer: typeof Buffer }).Buffer = Buffer
+import process from 'process'
+;(globalThis as unknown as { Buffer: typeof Buffer; process: typeof process }).Buffer = Buffer
+;(globalThis as unknown as { Buffer: typeof Buffer; process: typeof process }).process = process
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'

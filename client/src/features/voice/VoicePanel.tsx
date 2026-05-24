@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Mic, MicOff, Video, VideoOff, MonitorUp, MonitorOff, PhoneOff, Headphones, HeadphoneOff, Settings as SettingsIcon, Activity } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useWebRTC, type VoicePeer } from './useWebRTC'
@@ -12,7 +12,6 @@ export default function VoicePanel({ channelId, channelName }: { channelId: stri
   const me = useAuthStore((s) => s.user)
   const rtc = useWebRTC(channelId)
   const joinedRef = useRef<string | null>(null)
-  const [denied, setDenied] = useState<string | null>(null)
   const speaking = useVoiceStore((s) => s.speakingUsers)
   const { guildId } = useParams()
   const nav = useNavigate()
@@ -26,10 +25,7 @@ export default function VoicePanel({ channelId, channelName }: { channelId: stri
   useEffect(() => {
     if (joinedRef.current === channelId) return
     joinedRef.current = channelId
-    setDenied(null)
-    rtc.join(channelId).catch((e: Error) => {
-      setDenied(e?.name === 'NotAllowedError' ? 'Microphone permission denied' : 'Could not start voice')
-    })
+    rtc.join(channelId)
     return () => {
       rtc.leave()
       joinedRef.current = null
@@ -40,7 +36,6 @@ export default function VoicePanel({ channelId, channelName }: { channelId: stri
   function handleLeave() {
     rtc.leave()
     joinedRef.current = null
-    // navigate to first text channel in guild — ServerView's effect redirects if needed
     if (guildId) {
       const g = guilds.data?.find((x) => x.id === guildId)
       const firstText = g?.channels.find((c) => c.type === 'text')
@@ -50,36 +45,27 @@ export default function VoicePanel({ channelId, channelName }: { channelId: stri
     }
   }
 
-  const errorMsg = rtc.error || denied
   const tileCount = rtc.peers.length + 1
-  // Discord-style auto-grid: 1 = full, 2 = 2col, 3-4 = 2x2, 5-9 = 3xN
   const cols = tileCount <= 1 ? 1 : tileCount <= 4 ? 2 : 3
 
   return (
     <div className="flex-1 flex flex-col bg-[#1E1F22] min-h-0 relative overflow-hidden">
       {/* Stage */}
       <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-4 gap-2">
-        {errorMsg ? (
+        {rtc.error ? (
+          /* Room-level failure (not mic) — block */
           <div className="text-center max-w-md">
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-danger/20 grid place-items-center">
               <MicOff size={36} className="text-danger" />
             </div>
-            <div className="text-[20px] font-bold text-text-hi mb-2">{errorMsg}</div>
-            <p className="text-text-mute text-[14px] mb-4">Grant microphone access in your browser to join voice channels.</p>
-            <div className="flex gap-2 justify-center">
-              <button
-                onClick={() => location.reload()}
-                className="bg-brand hover:bg-brand-hi text-white px-4 h-9 rounded text-[14px] font-medium"
-              >
-                Retry
-              </button>
-              <button
-                onClick={handleLeave}
-                className="bg-rail hover:bg-hover-a text-text-hi px-4 h-9 rounded text-[14px] font-medium"
-              >
-                Leave channel
-              </button>
-            </div>
+            <div className="text-[20px] font-bold text-text-hi mb-2">{rtc.error}</div>
+            <p className="text-text-mute text-[14px] mb-4">Could not join voice channel.</p>
+            <button
+              onClick={handleLeave}
+              className="bg-rail hover:bg-hover-a text-text-hi px-4 h-9 rounded text-[14px] font-medium"
+            >
+              Leave
+            </button>
           </div>
         ) : !rtc.connected ? (
           <div className="text-center">
@@ -90,42 +76,60 @@ export default function VoicePanel({ channelId, channelName }: { channelId: stri
             <div className="text-text-mute text-[13px] mt-1">#{channelName}</div>
           </div>
         ) : (
-          <div
-            className="grid gap-2 w-full h-full place-content-center"
-            style={{
-              gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-              maxWidth: cols === 1 ? 720 : cols === 2 ? 1100 : 1400,
-            }}
-          >
-            <Tile
-              key="self"
-              stream={rtc.localStream}
-              mediaVer={rtc.mediaVer}
-              muted
-              speaking={speaking.has('self') && rtc.micOn}
-              micOff={!rtc.micOn}
-              screen={rtc.screenOn}
-              peer={{
-                socketId: 'self',
-                userId: me?.id || 'self',
-                username: me?.username || 'You',
+          <div className="w-full h-full flex flex-col gap-2">
+            {/* Mic unavailable inline banner */}
+            {rtc.micError && !rtc.micAvailable && (
+              <div className="shrink-0 mx-auto w-full max-w-lg bg-idle/15 border border-idle/30 rounded-lg px-4 py-2.5 flex items-center gap-3">
+                <MicOff size={16} className="text-idle shrink-0" />
+                <span className="text-[13px] text-idle flex-1">Microphone unavailable — you can still hear others.</span>
+                <button
+                  onClick={rtc.requestMic}
+                  className="text-[12px] font-semibold text-idle hover:text-text-hi bg-idle/20 hover:bg-idle/30 px-3 h-7 rounded transition-colors shrink-0"
+                >
+                  Enable mic
+                </button>
+              </div>
+            )}
+
+            <div
+              className="flex-1 grid gap-2 place-content-center"
+              style={{
+                gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                maxWidth: cols === 1 ? 720 : cols === 2 ? 1100 : 1400,
+                margin: '0 auto',
+                width: '100%',
               }}
-              avatarColor={me?.avatarColor}
-              avatarUrl={me?.avatarUrl}
-              isYou
-            />
-            {rtc.peers.map((p) => (
+            >
               <Tile
-                key={p.socketId}
-                peer={p}
-                stream={p.stream}
+                key="self"
+                stream={rtc.localStream}
                 mediaVer={rtc.mediaVer}
-                speaking={speaking.has(p.userId)}
-                deafened={rtc.deafened}
-                avatarColor={memberByUserId[p.userId]?.avatarColor}
-                avatarUrl={memberByUserId[p.userId]?.avatarUrl}
+                muted
+                speaking={speaking.has('self') && rtc.micOn}
+                micOff={!rtc.micAvailable || !rtc.micOn}
+                screen={rtc.screenOn}
+                peer={{
+                  socketId: 'self',
+                  userId: me?.id || 'self',
+                  username: me?.username || 'You',
+                }}
+                avatarColor={me?.avatarColor}
+                avatarUrl={me?.avatarUrl}
+                isYou
               />
-            ))}
+              {rtc.peers.map((p) => (
+                <Tile
+                  key={p.socketId}
+                  peer={p}
+                  stream={p.stream}
+                  mediaVer={rtc.mediaVer}
+                  speaking={speaking.has(p.userId)}
+                  deafened={rtc.deafened}
+                  avatarColor={memberByUserId[p.userId]?.avatarColor}
+                  avatarUrl={memberByUserId[p.userId]?.avatarUrl}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -150,11 +154,11 @@ export default function VoicePanel({ channelId, channelName }: { channelId: stri
             </CtrlBtn>
             <div className="w-px h-6 bg-divider/60 mx-1" />
             <CtrlBtn
-              title={rtc.micOn ? 'Mute' : 'Unmute'}
+              title={!rtc.micAvailable ? 'Enable microphone' : rtc.micOn ? 'Mute' : 'Unmute'}
               onClick={rtc.toggleMic}
-              danger={!rtc.micOn}
+              danger={!rtc.micAvailable || !rtc.micOn}
             >
-              {rtc.micOn ? <Mic size={20} /> : <MicOff size={20} />}
+              {rtc.micAvailable && rtc.micOn ? <Mic size={20} /> : <MicOff size={20} />}
             </CtrlBtn>
             <CtrlBtn
               title={rtc.deafened ? 'Undeafen' : 'Deafen'}
@@ -240,14 +244,10 @@ function Tile({
   const vref = useRef<HTMLVideoElement>(null)
   const aref = useRef<HTMLAudioElement>(null)
 
-  // pick the latest live video track; re-evaluate whenever mediaVer bumps
   const liveVideo = stream?.getVideoTracks().find((t) => t.readyState === 'live' && t.enabled !== false)
   const hasVideo = !!liveVideo
   const trackId = liveVideo?.id
 
-  // Attach / reattach srcObject every time stream OR its track set changes.
-  // Setting srcObject = null first is critical: Chrome will not start
-  // rendering a newly-added video track on an existing srcObject otherwise.
   useEffect(() => {
     const el = vref.current
     if (!el || !stream) return
@@ -299,7 +299,7 @@ function Tile({
         </div>
       )}
 
-      {/* hidden remote audio (local Tile is muted via `muted` prop) */}
+      {/* hidden remote audio */}
       {stream && !muted && <audio ref={aref} autoPlay />}
 
       {/* bottom label */}

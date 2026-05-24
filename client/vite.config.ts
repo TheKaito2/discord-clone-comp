@@ -8,10 +8,11 @@ export default defineConfig({
     alias: {
       process: 'process/browser',
       stream: 'stream-browserify',
+      events: 'events',
     },
   },
   optimizeDeps: {
-    include: ['buffer', 'process', 'simple-peer'],
+    include: ['buffer', 'process', 'events', 'stream-browserify', 'simple-peer'],
   },
   server: {
     port: 5173,
