@@ -112,19 +112,19 @@ export default function AppShell() {
       )}
 
       <main className="flex-1 bg-bg flex flex-col min-w-0">
-        <header className="h-12 border-b border-rail/60 flex items-center px-4 shadow-elev1 gap-3">
+        <header className="h-12 border-b border-rail/60 flex items-center px-2 shadow-elev1 gap-2">
           {channel ? (
             <>
               {channel.type === 'voice' ? (
-                <Volume2 size={20} className="text-text-dim" />
+                <Volume2 size={24} className="text-text-dim shrink-0" />
               ) : (
-                <Hash size={20} className="text-text-dim" />
+                <Hash size={24} className="text-text-dim shrink-0" />
               )}
-              <span className="font-semibold text-text-hi">{channel.name}</span>
+              <span className="font-semibold text-[15px] text-text-hi leading-5">{channel.name}</span>
               {channel.topic && (
                 <>
-                  <span className="w-px h-5 bg-divider/60" />
-                  <span className="text-text-sub text-sm truncate">{channel.topic}</span>
+                  <span className="w-px h-4 bg-divider/60 mx-1" />
+                  <span className="text-text-mute text-[13px] truncate">{channel.topic}</span>
                 </>
               )}
             </>

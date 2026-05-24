@@ -79,7 +79,7 @@ export default function MessageItem({
             </div>
           </div>
         ) : (
-          <div className="text-[15px] text-text-body leading-[22px] break-words whitespace-pre-wrap">
+          <div className="text-[15px] text-text-body leading-[20px] break-words whitespace-pre-wrap mt-0.5">
             {m.content}
             {m.editedAt && <span className="text-[10px] text-text-sub ml-1">(edited)</span>}
             {m.pending && <span className="text-[10px] text-text-sub ml-1">…</span>}
