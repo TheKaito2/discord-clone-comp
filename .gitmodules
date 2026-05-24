@@ -1,0 +1,3 @@
+[submodule "landing"]
+	path = landing
+	url = https://github.com/Natchanon-Makpaiboon/discordlandingpageclone.git
