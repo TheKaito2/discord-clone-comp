@@ -28,7 +28,10 @@ export default function MemberList({ members }: { members: Member[] }) {
 
 function MemberRow({ m, dim }: { m: Member; dim?: boolean }) {
   return (
-    <div className={clsx('flex items-center gap-3 px-2 py-1.5 rounded hover:bg-hover-a', dim && 'opacity-60')}>
+    <div className={clsx(
+      'flex items-center gap-3 px-2 py-1.5 rounded-md cursor-pointer transition-all hover:bg-hover-a',
+      dim && 'opacity-60 hover:opacity-100',
+    )}>
       <div className="relative shrink-0">
         <Avatar username={m.username} avatarColor={m.avatarColor} avatarUrl={m.avatarUrl} size={32} />
         <span

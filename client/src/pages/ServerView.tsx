@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Hash, Volume2, Users, Search } from 'lucide-react'
+import clsx from 'clsx'
 import ChannelSidebar from '../layout/ChannelSidebar'
 import MemberList from '../layout/MemberList'
 import UserPanel from '../layout/UserPanel'
@@ -88,11 +89,24 @@ export default function ServerView() {
           ) : (
             <span className="text-text-sub">Select a channel</span>
           )}
-          <div className="ml-auto flex items-center gap-3 text-text-sub">
-            <button onClick={() => setShowSearch(true)} className="p-1 hover:text-text-hi" title="Search (⌘K)">
-              <Search size={18} />
+          <div className="ml-auto flex items-center gap-1 text-text-sub">
+            <button
+              onClick={() => setShowSearch(true)}
+              className="px-2 h-7 inline-flex items-center gap-1.5 rounded text-[12px] font-medium bg-rail/60 hover:bg-rail border border-divider/40 hover:text-text-hi transition-colors"
+              title="Search (⌘K)"
+            >
+              <Search size={14} />
+              <span className="hidden md:inline">Search</span>
+              <kbd className="hidden md:inline text-[10px] font-bold bg-bg/70 border border-divider/40 rounded px-1 ml-0.5 text-text-meta">⌘K</kbd>
             </button>
-            <button onClick={() => setShowMembers((v) => !v)} className="p-1 hover:text-text-hi" title="Members">
+            <button
+              onClick={() => setShowMembers((v) => !v)}
+              className={clsx(
+                'p-1.5 rounded hover:bg-hover-a/50 transition-colors',
+                showMembers ? 'text-text-hi' : 'hover:text-text-hi',
+              )}
+              title="Members"
+            >
               <Users size={18} />
             </button>
           </div>

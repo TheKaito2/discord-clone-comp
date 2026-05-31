@@ -83,9 +83,20 @@ export default function MessageList({
   return (
     <div ref={containerRef} className="flex-1 overflow-y-auto py-4">
       <div ref={sentinelRef} className="h-1" />
-      {loadingMore && <div className="text-center text-xs text-text-sub py-2">loading…</div>}
+      {loadingMore && (
+        <div className="flex items-center justify-center gap-2 py-3 text-text-sub text-[12px]">
+          <span className="w-3 h-3 rounded-full border-2 border-text-sub border-t-transparent animate-spin" />
+          loading earlier messages…
+        </div>
+      )}
       {!loadingMore && messages.length === 0 && (
-        <div className="text-center text-text-sub py-8">No messages yet. Say hi!</div>
+        <div className="px-6 pt-10 pb-6 anim-fade-in">
+          <div className="w-16 h-16 rounded-2xl bg-brand grid place-items-center mb-4 shadow-glow-brand">
+            <span className="text-white font-bold text-2xl">#</span>
+          </div>
+          <h3 className="text-text-hi font-bold text-[28px] tracking-tight">Welcome!</h3>
+          <p className="text-text-mute text-[15px] mt-1">This is the start of the conversation. Say hi 👋</p>
+        </div>
       )}
       {items.map((it, i) =>
         it.kind === 'date' ? (

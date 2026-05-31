@@ -55,10 +55,10 @@ export default function CreateServerModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 grid place-items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-black/70 grid place-items-center anim-fade-in p-4" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[440px] bg-bg-grad rounded-md shadow-2xl overflow-hidden text-text-hi relative"
+        className="w-full max-w-[460px] bg-bg-grad rounded-xl shadow-elev2 overflow-hidden text-text-hi relative anim-scale-in"
       >
         <button onClick={onClose} className="absolute top-4 right-4 text-text-mute hover:text-text-hi z-10" title="Close">
           <X size={20} />

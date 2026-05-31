@@ -27,9 +27,17 @@ export default function ChannelSidebar({ guild }: { guild: Guild }) {
   return (
     <aside className="w-sidebar bg-panel flex flex-col shrink-0 h-full">
       {/* Server banner — 240×135 with linear gradient overlay per d19 spec */}
-      <div className="relative w-sidebar h-[135px] overflow-hidden shrink-0">
-        <img src="/server-banner.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
-        <div className="absolute inset-x-0 bottom-0 h-[58px] bg-gradient-to-b from-transparent to-black/60" />
+      <div className="relative w-sidebar h-[135px] overflow-hidden shrink-0 group">
+        <img
+          src="/server-banner.png"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+        />
+        <div className="absolute inset-x-0 bottom-0 h-[80px] bg-gradient-to-b from-transparent via-panel/40 to-panel" />
+        <div className="absolute top-2 right-2 flex items-center gap-1 px-2 h-5 rounded-full bg-black/45 backdrop-blur text-[10px] font-bold uppercase tracking-cap text-white/90">
+          <span className="w-1.5 h-1.5 rounded-full bg-online animate-pulse-soft" />
+          Live
+        </div>
       </div>
 
       {/* Server header — d19: 240×48, padding 12/16, font 15/600/#FFF */}
@@ -121,8 +129,8 @@ function BrowseChannelsModal({ guild, onClose }: { guild: Guild; onClose: () => 
   const [q, setQ] = useState('')
   const filtered = guild.channels.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()))
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 grid place-items-center" onClick={onClose}>
-      <div className="bg-panel rounded-lg w-[520px] max-h-[70vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 bg-black/70 grid place-items-center anim-fade-in p-4" onClick={onClose}>
+      <div className="glass-panel rounded-xl w-[520px] max-h-[70vh] flex flex-col anim-scale-in shadow-elev2" onClick={(e) => e.stopPropagation()}>
         <header className="px-5 py-4 border-b border-divider/40 flex items-center justify-between shrink-0">
           <div>
             <h3 className="text-[18px] font-bold text-text-hi">Browse Channels</h3>
@@ -196,7 +204,7 @@ function Category({
                 <Link
                   to={`/app/${guildId}/${c.id}`}
                   className={clsx(
-                    'mx-2 flex items-center gap-1.5 w-[calc(100%-1rem)] h-8 pl-2 pr-5 rounded-[4px] transition-colors',
+                    'mx-2 flex items-center gap-1.5 w-[calc(100%-1rem)] h-8 pl-2 pr-5 rounded-[4px] transition-all relative',
                     active
                       ? 'bg-active-a text-text-hi'
                       : 'text-text-sub hover:bg-hover-a hover:text-text-mute',

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ChatMessage } from '../../lib/queries'
 import { useAuthStore } from '../../store/auth'
-import { Pencil, Trash2, Check, X } from 'lucide-react'
+import { Pencil, Trash2, Check, X, SmilePlus, Reply, MoreHorizontal } from 'lucide-react'
 import Avatar from '../../components/Avatar'
 
 function fmtTime(iso: string) {
@@ -26,7 +26,7 @@ export default function MessageItem({
   const [draft, setDraft] = useState(m.content)
 
   return (
-    <div className="group flex gap-4 px-4 py-0.5 hover:bg-bg-grad/40 relative">
+    <div className="group flex gap-4 px-4 py-0.5 hover:bg-bg-grad/40 relative transition-colors">
       <div className="w-10 shrink-0 pt-0.5">
         {!hideHeader ? (
           <Avatar
@@ -93,23 +93,45 @@ export default function MessageItem({
         )}
       </div>
 
-      {mine && !editing && (
-        <div className="opacity-0 group-hover:opacity-100 absolute right-4 top-0 bg-panel rounded shadow flex">
+      {!editing && (
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute right-4 -top-3 bg-panel rounded-md shadow-elev2 border border-divider/50 flex items-center">
           <button
-            onClick={() => setEditing(true)}
-            className="p-1.5 text-text-sub hover:text-text-hi"
-            title="Edit"
+            className="p-1.5 text-text-sub hover:text-text-hi hover:bg-hover-a transition-colors first:rounded-l-md"
+            title="Add reaction"
           >
-            <Pencil size={14} />
+            <SmilePlus size={15} />
           </button>
           <button
-            onClick={() => {
-              if (confirm('Delete this message?')) onDelete(m.id)
-            }}
-            className="p-1.5 text-text-sub hover:text-danger"
-            title="Delete"
+            className="p-1.5 text-text-sub hover:text-text-hi hover:bg-hover-a transition-colors"
+            title="Reply"
           >
-            <Trash2 size={14} />
+            <Reply size={15} />
+          </button>
+          {mine && (
+            <>
+              <button
+                onClick={() => setEditing(true)}
+                className="p-1.5 text-text-sub hover:text-text-hi hover:bg-hover-a transition-colors"
+                title="Edit"
+              >
+                <Pencil size={15} />
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm('Delete this message?')) onDelete(m.id)
+                }}
+                className="p-1.5 text-text-sub hover:text-danger hover:bg-danger/15 transition-colors"
+                title="Delete"
+              >
+                <Trash2 size={15} />
+              </button>
+            </>
+          )}
+          <button
+            className="p-1.5 text-text-sub hover:text-text-hi hover:bg-hover-a transition-colors last:rounded-r-md"
+            title="More"
+          >
+            <MoreHorizontal size={15} />
           </button>
         </div>
       )}

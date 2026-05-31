@@ -59,12 +59,12 @@ export default function JoinModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/70 grid place-items-center"
+      className="fixed inset-0 z-50 bg-black/70 grid place-items-center anim-fade-in p-4"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-panel rounded-lg shadow-2xl overflow-hidden"
+        className="w-full max-w-md glass-panel rounded-xl shadow-elev2 overflow-hidden anim-scale-in"
       >
         <header className="flex items-center justify-between p-4 border-b border-rail/60">
           <h2 className="font-bold text-text-hi text-lg">Join a server</h2>

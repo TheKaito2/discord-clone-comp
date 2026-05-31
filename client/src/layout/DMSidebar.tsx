@@ -80,7 +80,7 @@ export default function DMSidebar() {
               <Link
                 to={`/app/dm/${d.id}`}
                 className={clsx(
-                  'flex items-center gap-3 h-[42px] px-2 rounded-[4px] w-full',
+                  'flex items-center gap-3 h-[42px] px-2 rounded-[4px] w-full transition-colors',
                   active ? 'text-text-hi' : 'text-text-sub hover:text-text-mute',
                 )}
               >

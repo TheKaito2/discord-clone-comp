@@ -82,7 +82,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   if (!user) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-bg">
+    <div className="fixed inset-0 z-50 flex bg-bg anim-fade-in">
       {/* Sidebar — pinned far-left */}
       <aside className="w-[232px] shrink-0 bg-panel py-[60px] pl-3 pr-1.5 overflow-y-auto">
         {GROUPS.map((g) => (

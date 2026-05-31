@@ -92,7 +92,18 @@ export default function AppLayout() {
   }, [])
 
   if (guilds.isLoading) {
-    return <div className="h-screen grid place-items-center bg-bg text-text-sub">Loading…</div>
+    return (
+      <div className="h-screen grid place-items-center bg-aurora text-text-sub">
+        <div className="text-center anim-fade-in">
+          <div className="relative w-16 h-16 mx-auto mb-4">
+            <div className="absolute inset-0 rounded-2xl bg-brand grid place-items-center anim-pulse-ring shadow-glow-brand">
+              <span className="text-white font-bold text-2xl">D</span>
+            </div>
+          </div>
+          <div className="text-text-mute text-[14px] font-medium">Connecting…</div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -109,10 +120,18 @@ export default function AppLayout() {
           />
         )}
         {incoming && (
-          <div className="fixed bottom-6 right-6 z-50 w-80 bg-panel border border-divider/60 rounded-lg shadow-elev1 overflow-hidden">
-            <div className="px-4 py-3 border-b border-divider/60">
-              <div className="text-text-sub text-[11px] uppercase tracking-cap font-semibold">Incoming Call</div>
-              <div className="text-text-hi text-[15px] font-semibold mt-0.5">{incoming.from.username}</div>
+          <div className="fixed bottom-6 right-6 z-50 w-[320px] glass-panel border border-divider/60 rounded-xl shadow-elev2 overflow-hidden anim-slide-up">
+            <div className="px-4 py-3.5 border-b border-divider/60 flex items-center gap-3">
+              <div className="relative">
+                <div className="w-10 h-10 rounded-full bg-online/20 grid place-items-center text-online">
+                  <Phone size={18} />
+                </div>
+                <span className="absolute inset-0 rounded-full anim-pulse-ring pointer-events-none" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-text-sub text-[11px] uppercase tracking-cap font-semibold">Incoming Call</div>
+                <div className="text-text-hi text-[15px] font-semibold mt-0.5 truncate">{incoming.from.username}</div>
+              </div>
             </div>
             <div className="px-4 py-3 flex gap-2">
               <button

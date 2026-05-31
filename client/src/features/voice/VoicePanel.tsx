@@ -49,9 +49,32 @@ export default function VoicePanel({ channelId, channelName }: { channelId: stri
   const cols = tileCount <= 1 ? 1 : tileCount <= 4 ? 2 : 3
 
   return (
-    <div className="flex-1 flex flex-col bg-[#1E1F22] min-h-0 relative overflow-hidden">
+    <div className="flex-1 flex flex-col bg-[#0F1014] min-h-0 relative overflow-hidden">
+      {/* subtle ambient bg */}
+      <div
+        aria-hidden
+        className="absolute inset-0 pointer-events-none opacity-60"
+        style={{
+          background:
+            'radial-gradient(800px 480px at 20% 10%, rgba(88,101,242,0.18), transparent 60%), radial-gradient(700px 480px at 100% 100%, rgba(35,165,89,0.10), transparent 60%)',
+        }}
+      />
+      <div aria-hidden className="absolute inset-0 bg-grid opacity-[0.12] pointer-events-none" />
+
+      {/* Top bar — channel info */}
+      {rtc.connected && (
+        <div className="relative shrink-0 px-4 pt-3 pb-1 flex items-center gap-2 text-text-mute text-[12px] anim-fade-in">
+          <span className="inline-flex items-center gap-1.5 bg-black/35 backdrop-blur px-2.5 h-7 rounded-full border border-white/5">
+            <span className="w-1.5 h-1.5 rounded-full bg-online animate-pulse-soft" />
+            <span className="font-semibold text-text-hi">#{channelName}</span>
+            <span className="text-text-meta">·</span>
+            <span>{tileCount} {tileCount === 1 ? 'person' : 'people'}</span>
+          </span>
+        </div>
+      )}
+
       {/* Stage */}
-      <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-4 gap-2">
+      <div className="relative flex-1 min-h-0 flex flex-col items-center justify-center p-4 gap-2">
         {rtc.error ? (
           /* Room-level failure (not mic) — block */
           <div className="text-center max-w-md">
@@ -136,8 +159,8 @@ export default function VoicePanel({ channelId, channelName }: { channelId: stri
 
       {/* Bottom control rail — Discord style pill */}
       {rtc.connected && (
-        <div className="shrink-0 px-4 pb-5 pt-2 flex justify-center">
-          <div className="bg-[#232428] rounded-full px-2 py-1.5 flex items-center gap-1 shadow-elev1">
+        <div className="relative shrink-0 px-4 pb-5 pt-2 flex justify-center anim-slide-up">
+          <div className="bg-[#232428]/95 backdrop-blur rounded-full px-2 py-1.5 flex items-center gap-1 shadow-elev2 border border-white/5">
             <CtrlBtn
               title={rtc.camOn ? 'Stop video' : 'Start video'}
               onClick={rtc.toggleCam}
@@ -270,12 +293,22 @@ function Tile({
   return (
     <div
       className={clsx(
-        'relative rounded-lg overflow-hidden grid place-items-center transition-shadow',
+        'relative rounded-xl overflow-hidden grid place-items-center transition-all anim-fade-in',
         'min-h-[180px] aspect-video bg-[#000000]',
-        speaking && 'ring-2 ring-online shadow-[0_0_0_2px_rgba(35,165,89,0.4)]',
-        !speaking && 'ring-1 ring-rail',
+        speaking && 'ring-2 ring-online shadow-glow-online',
+        !speaking && 'ring-1 ring-white/5',
       )}
     >
+      {/* gradient backdrop when no video */}
+      {!hasVideo && (
+        <div
+          aria-hidden
+          className="absolute inset-0"
+          style={{
+            background: `radial-gradient(circle at 50% 40%, ${avatarColor || '#5865F2'}33 0%, transparent 70%), #15171B`,
+          }}
+        />
+      )}
       {hasVideo ? (
         <video
           ref={vref}
@@ -288,13 +321,16 @@ function Tile({
           )}
         />
       ) : (
-        <div className="grid place-items-center">
+        <div className="relative grid place-items-center">
+          {speaking && !micOff && (
+            <span className="absolute inset-[-12px] rounded-full anim-pulse-ring pointer-events-none" />
+          )}
           <Avatar
             username={peer.username}
             avatarColor={avatarColor}
             avatarUrl={avatarUrl}
             size={88}
-            className="shadow-elev1 text-4xl"
+            className="shadow-elev2 text-4xl relative"
           />
         </div>
       )}

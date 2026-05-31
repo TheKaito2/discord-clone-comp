@@ -6,7 +6,15 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev"],
       "port": 5173,
+      "autoPort": false,
       "cwd": "client"
+    },
+    {
+      "name": "server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["src/index.js"],
+      "port": 4000,
+      "cwd": "server"
     }
   ]
 }

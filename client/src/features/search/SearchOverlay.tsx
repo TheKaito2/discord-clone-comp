@@ -54,12 +54,12 @@ export default function SearchOverlay({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center pt-24"
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center pt-24 anim-fade-in"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl bg-panel rounded-lg shadow-2xl overflow-hidden"
+        className="w-full max-w-2xl glass-panel rounded-xl shadow-elev2 overflow-hidden anim-scale-in"
       >
         <div className="flex items-center gap-3 px-4 py-3 border-b border-rail/60">
           <Search size={20} className="text-text-sub" />

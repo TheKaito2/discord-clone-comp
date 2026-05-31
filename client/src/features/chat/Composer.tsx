@@ -59,7 +59,7 @@ export default function Composer({
       {showEmoji && (
         <div
           ref={pickerRef}
-          className="absolute bottom-20 right-6 bg-rail rounded-lg p-3 shadow-elev1 w-[280px] grid grid-cols-8 gap-1 z-20 border border-divider/60"
+          className="absolute bottom-20 right-6 glass-panel rounded-xl p-3 shadow-elev2 w-[280px] grid grid-cols-8 gap-1 z-20 border border-divider/60 anim-scale-in"
         >
           {EMOJI.map((e) => (
             <button
@@ -72,7 +72,7 @@ export default function Composer({
           ))}
         </div>
       )}
-      <div className="bg-[#383A40] rounded-lg flex items-end gap-2 px-3 py-2.5">
+      <div className="bg-[#383A40] rounded-lg flex items-end gap-2 px-3 py-2.5 transition-shadow focus-within:shadow-[0_0_0_2px_rgba(88,101,242,0.35)]">
         <input ref={fileRef} type="file" onChange={onAttachFile} className="hidden" />
         <button
           onClick={() => fileRef.current?.click()}
@@ -124,8 +124,17 @@ export default function Composer({
         >
           <Smile size={20} />
         </button>
-        <button onClick={submit} className="text-brand hover:text-brand-hi shrink-0 p-1" title="Send">
-          <Send size={20} />
+        <button
+          onClick={submit}
+          disabled={!val.trim()}
+          className={`shrink-0 grid place-items-center h-8 w-8 rounded-full transition-all ${
+            val.trim()
+              ? 'bg-brand hover:bg-brand-hi text-white shadow-glow-brand hover:scale-105'
+              : 'text-text-meta cursor-not-allowed'
+          }`}
+          title="Send"
+        >
+          <Send size={16} />
         </button>
       </div>
     </div>

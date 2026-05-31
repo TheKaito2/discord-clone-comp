@@ -49,6 +49,23 @@ export default {
       },
       boxShadow: {
         elev1: '0 1px 0 rgba(4,4,5,0.2), 0 1.5px 0 rgba(6,6,7,0.05), 0 2px 0 rgba(4,4,5,0.05)',
+        elev2: '0 8px 16px rgba(0,0,0,0.24), 0 2px 6px rgba(0,0,0,0.18)',
+        'glow-brand': '0 0 0 1px rgba(88,101,242,0.45), 0 8px 24px -6px rgba(88,101,242,0.55)',
+        'glow-online': '0 0 0 1px rgba(35,165,89,0.45), 0 8px 24px -6px rgba(35,165,89,0.5)',
+        card: '0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -8px rgba(0,0,0,0.4)',
+      },
+      transitionTimingFunction: {
+        snappy: 'cubic-bezier(0.16, 1, 0.3, 1)',
+        spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+      },
+      keyframes: {
+        'pulse-soft': {
+          '0%, 100%': { opacity: '0.7' },
+          '50%': { opacity: '1' },
+        },
+      },
+      animation: {
+        'pulse-soft': 'pulse-soft 2.4s ease-in-out infinite',
       },
     },
   },

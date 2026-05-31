@@ -37,7 +37,7 @@ export default function StatusMenu({ onClose }: { onClose: () => void }) {
   return (
     <div
       ref={ref}
-      className="absolute bottom-full mb-2 left-2 right-2 bg-rail rounded-md shadow-2xl py-2 overflow-hidden z-30"
+      className="absolute bottom-full mb-2 left-2 right-2 glass-panel rounded-lg shadow-elev2 py-2 overflow-hidden z-30 anim-scale-in"
     >
       <div className="px-3 py-2 border-b border-divider/60">
         <div className="text-text-hi font-semibold text-sm">{user.username}</div>
